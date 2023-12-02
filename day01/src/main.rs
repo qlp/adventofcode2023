@@ -39,20 +39,19 @@ fn one(input: &str) -> String {
     input
         .lines()
         .map(|line| -> u32 {
-            let first = number(&line);
+            let first = number(line);
             let second = number(&line.chars().rev().collect::<String>());
 
             first * 10 + second
         })
-        .fold(0, |total, number| -> u32 { total + number })
+        .sum::<u32>()
         .to_string()
 }
 
 fn number(string: &str) -> u32 {
     string
         .chars()
-        .filter(|&c| c.is_digit(10))
-        .next()
+        .find(|&c| c.is_ascii_digit())
         .expect("no digits in string")
         .to_digit(10)
         .expect("not an ascii digit")
@@ -62,12 +61,12 @@ fn two(input: &str) -> String {
     input
         .lines()
         .map(|line| -> u32 {
-            let first = number_from_text(&line, true);
-            let second = number_from_text(&line, false);
+            let first = number_from_text(line, true);
+            let second = number_from_text(line, false);
 
             first * 10 + second
         })
-        .fold(0, |total, number| -> u32 { total + number })
+        .sum::<u32>()
         .to_string()
 }
 
@@ -88,7 +87,7 @@ fn number_from_text(string: &str, left_to_right: bool) -> u32 {
                 answer_index: string.len(),
             },
             |answer, (answer_index, &candidate)| {
-                let candidate = reverse_if_required(&candidate, left_to_right);
+                let candidate = reverse_if_required(candidate, left_to_right);
 
                 let index_of_candidate = string.find(&candidate).unwrap_or(string.len());
 
