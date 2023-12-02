@@ -24,6 +24,13 @@ struct Game {
     subsets: Vec<Subset>,
 }
 
+#[derive(Debug)]
+struct Subset {
+    red: u32,
+    blue: u32,
+    green: u32,
+}
+
 impl Subset {
     fn product(&self) -> u32 {
         self.red * self.green * self.blue
@@ -44,13 +51,6 @@ impl Subset {
     fn se(&self, other: &Self) -> bool {
         self.red <= other.red && self.green <= other.green && self.blue <= other.blue
     }
-}
-
-#[derive(Debug)]
-struct Subset {
-    red: u32,
-    blue: u32,
-    green: u32,
 }
 
 fn one(input: &str) -> String {
@@ -79,22 +79,9 @@ fn parse(input: &str) -> Vec<Game> {
     input
         .lines()
         .map(|line| -> Game {
-            Game {
-                id: line
-                    .split(": ")
-                    .next()
-                    .expect("no semicolon")
-                    .split(' ')
-                    .last()
-                    .expect("no space")
-                    .parse()
-                    .expect("not a number"),
-                subsets: line
-                    .split(": ")
-                    .last()
-                    .expect("no semicolon")
-                    .split("; ")
-                    .map(|s| -> HashMap<&str, u32> {
+            line.split_once(": ").and_then(|(game, sets)| {
+                game.split_once(' ').map(|(_, id)| {
+                    let subsets = sets.split("; ").map(|s| -> HashMap<&str, u32> {
                         s
                             .split(", ")
                             .map(|s| -> (&str, u32) {
@@ -114,14 +101,16 @@ fn parse(input: &str) -> Vec<Game> {
                             .collect()
                     }
                     )
-                    .map(|s|
-                        Subset {
-                            red: s.get("red").copied().unwrap_or(0),
-                            blue: s.get("blue").copied().unwrap_or(0),
-                            green: s.get("green").copied().unwrap_or(0),
-                        })
-                    .collect(),
-            }
+                        .map(|s|
+                            Subset {
+                                red: s.get("red").copied().unwrap_or(0),
+                                blue: s.get("blue").copied().unwrap_or(0),
+                                green: s.get("green").copied().unwrap_or(0),
+                            })
+                        .collect::<Vec<_>>();
+                    Game { id: id.parse().unwrap(), subsets }
+                })
+            }).expect("it's a game")
         })
         .collect()
 }
