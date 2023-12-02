@@ -34,7 +34,7 @@ fn one(input: &str) -> String {
     input
         .lines()
         .map(|line| -> Game {
-            dbg!(Game {
+            Game {
                 id: line.split(": ").next().expect("no semicolon").split(" ").last().expect("no space").parse().expect("not a number"),
                 subsets: line
                     .split(": ")
@@ -68,7 +68,7 @@ fn one(input: &str) -> String {
                             green: s.get("green").copied().unwrap_or(0),
                         })
                     .collect(),
-            })
+            }
         })
         .filter(|g|
             g.subsets.iter().all(|s| s.red <= 12 && s.green <= 13 && s.blue <= 14)
