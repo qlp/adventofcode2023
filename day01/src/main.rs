@@ -36,7 +36,8 @@ fn print_answer(name: &str, actual: &str, expected: &str) {
 }
 
 fn one(input: &str) -> String {
-    input.lines()
+    input
+        .lines()
         .map(|line| -> u32 {
             let first = number(&line);
             let second = number(&line.chars().rev().collect::<String>());
@@ -48,7 +49,8 @@ fn one(input: &str) -> String {
 }
 
 fn number(string: &str) -> u32 {
-    string.chars()
+    string
+        .chars()
         .filter(|&c| c.is_digit(10))
         .next()
         .expect("no digits in string")
@@ -57,7 +59,8 @@ fn number(string: &str) -> u32 {
 }
 
 fn two(input: &str) -> String {
-    input.lines()
+    input
+        .lines()
         .map(|line| -> u32 {
             let first = number_from_text(&line, true);
             let second = number_from_text(&line, false);
@@ -76,16 +79,29 @@ struct Answer {
 fn number_from_text(string: &str, left_to_right: bool) -> u32 {
     let string = reverse_if_required(string, left_to_right);
 
-    NUMBERS.iter().enumerate().fold(Answer { answer: 0, answer_index: string.len() }, |answer, (answer_index, &candidate)| {
-        let candidate = reverse_if_required(&candidate, left_to_right);
+    NUMBERS
+        .iter()
+        .enumerate()
+        .fold(
+            Answer {
+                answer: 0,
+                answer_index: string.len(),
+            },
+            |answer, (answer_index, &candidate)| {
+                let candidate = reverse_if_required(&candidate, left_to_right);
 
-        let index_of_candidate = string.find(&candidate).unwrap_or(string.len());
+                let index_of_candidate = string.find(&candidate).unwrap_or(string.len());
 
-        match index_of_candidate < answer.answer_index {
-            true => Answer { answer: answer_index as u32 % 10, answer_index: index_of_candidate },
-            false => answer,
-        }
-    }).answer
+                match index_of_candidate < answer.answer_index {
+                    true => Answer {
+                        answer: answer_index as u32 % 10,
+                        answer_index: index_of_candidate,
+                    },
+                    false => answer,
+                }
+            },
+        )
+        .answer
 }
 
 fn reverse_if_required(string: &str, left_to_right: bool) -> String {
