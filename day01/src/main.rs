@@ -1069,24 +1069,24 @@ fn two() -> String {
         .to_string()
 }
 
-fn number_from_text(string: &str, left_to_right: bool) -> u32 {
-    let mut answer: u32 = 0;
-    let mut answer_index = string.len() as u32;
+struct Answer {
+    answer: u32,
+    answer_index: usize
+}
 
+fn number_from_text(string: &str, left_to_right: bool) -> u32 {
     let string = reverse_if_required(string, left_to_right);
 
-    for (index, candidate) in NUMBERS.iter().enumerate() {
-        let candidate = reverse_if_required(candidate, left_to_right);
+    NUMBERS.iter().enumerate().fold(Answer { answer: 0, answer_index: string.len()}, |answer, (answer_index, &candidate)| {
+        let candidate = reverse_if_required(&candidate, left_to_right);
 
-        let index_of_candidate = string.find(&candidate).unwrap_or(string.len()) as u32;
+        let index_of_candidate = string.find(&candidate).unwrap_or(string.len());
 
-        if index_of_candidate < answer_index {
-            answer_index = index_of_candidate;
-            answer = index as u32;
+        match index_of_candidate < answer.answer_index {
+            true => Answer { answer: answer_index as u32 % 10, answer_index: index_of_candidate },
+            false => answer,
         }
-    }
-
-    answer % 10
+    }).answer
 }
 
 fn reverse_if_required(string: &str, left_to_right: bool) -> String {
