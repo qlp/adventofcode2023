@@ -1025,68 +1025,60 @@ const NUMBERS: [&str; 20] = [
 ];
 
 fn main() {
-    println!("one: {}", one());
-    println!("two: {}", two());
+    print_answer("one", &one(), "54450");
+    print_answer("two", &two(), "54265");
+}
+
+fn print_answer(name: &str, actual: &str, expected: &str) {
+    match actual == expected {
+        true => println!("{name}: {actual} (OK)"),
+        false => println!("{name}: {actual} (ERROR: expected {expected})"),
+    }
 }
 
 fn one() -> String {
-    let mut total = 0;
+    INPUT.iter()
+        .map(|&line| -> u32 {
+            let first = number(line);
+            let second = number(&line.chars().rev().collect::<String>());
 
-    for line in INPUT {
-        let first = number(String::from(line));
-        let second = number(line.chars().rev().collect::<String>());
-
-        let number = first * 10 + second;
-
-        total += number;
-    }
-
-    total.to_string()
+            first * 10 + second
+        })
+        .fold(0, |total, number| -> u32 { total + number })
+        .to_string()
 }
 
-fn number(string: String) -> u32 {
-    for char in string.chars() {
-        if char.is_digit(10) {
-            return char.to_digit(10).expect("not an ascii digit")
-        }
-    }
-
-    0
+fn number(string: &str) -> u32 {
+    string.chars()
+        .filter(|&c| c.is_digit(10))
+        .next()
+        .expect("no digits in string")
+        .to_digit(10)
+        .expect("not an ascii digit")
 }
 
 fn two() -> String {
-    let mut total = 0;
+    INPUT.iter()
+        .map(|&line| -> u32 {
+            let first = number_from_text(&line, true);
+            let second = number_from_text(&line, false);
 
-    for line in INPUT {
-        let first = number_from_text(String::from(line), true);
-        let second = number_from_text(String::from(line), false);
-
-        let number = first * 10 + second;
-
-        total += number;
-    }
-
-    total.to_string()
+            first * 10 + second
+        })
+        .fold(0, |total, number| -> u32 { total + number })
+        .to_string()
 }
 
-fn number_from_text(string: String, left_to_right: bool) -> u32 {
+fn number_from_text(string: &str, left_to_right: bool) -> u32 {
     let mut answer: u32 = 0;
     let mut answer_index = string.len() as u32;
 
-    let string = if left_to_right {
-        string
-    } else {
-        string.chars().rev().collect::<String>()
-    };
+    let string = reverse_if_required(string, left_to_right);
 
     for (index, candidate) in NUMBERS.iter().enumerate() {
-        let candidate = if left_to_right {
-            candidate.to_string()
-        } else {
-            candidate.chars().rev().collect::<String>()
-        };
+        let candidate = reverse_if_required(candidate, left_to_right);
 
-        let index_of_candidate = string.find(candidate.as_str()).unwrap_or(string.len()) as u32;
+        let index_of_candidate = string.find(&candidate).unwrap_or(string.len()) as u32;
 
         if index_of_candidate < answer_index {
             answer_index = index_of_candidate;
@@ -1095,4 +1087,11 @@ fn number_from_text(string: String, left_to_right: bool) -> u32 {
     }
 
     answer % 10
+}
+
+fn reverse_if_required(string: &str, left_to_right: bool) -> String {
+    match left_to_right {
+        true => String::from(string),
+        false => string.chars().rev().collect::<String>(),
+    }
 }
