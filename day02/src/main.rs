@@ -24,6 +24,28 @@ struct Game {
     subsets: Vec<Subset>,
 }
 
+impl Subset {
+    fn product(&self) -> u32 {
+        self.red * self.green * self.blue
+    }
+
+    fn max(&self, other: &Self) -> Self {
+        Self {
+            red: max(self.red, other.red),
+            green: max(self.green, other.green),
+            blue: max(self.blue, other.blue),
+        }
+    }
+
+    fn zero() -> Self {
+        Self { red: 0, blue: 0, green: 0 }
+    }
+
+    fn se(&self, other: &Self) -> bool {
+        self.red <= other.red && self.green <= other.green && self.blue <= other.blue
+    }
+}
+
 #[derive(Debug)]
 struct Subset {
     red: u32,
@@ -36,7 +58,7 @@ fn one(input: &str) -> String {
         .iter()
         .filter(|g| g.subsets
             .iter()
-            .all(|s| s.red <= 12 && s.green <= 13 && s.blue <= 14))
+            .all(|s| s.se(&Subset { red: 12, green: 13, blue: 14 })))
         .map(|g| g.id)
         .sum::<u32>()
         .to_string()
@@ -45,17 +67,10 @@ fn one(input: &str) -> String {
 fn two(input: &str) -> String {
     parse(input)
         .iter()
-        .map(|g|
-            g.subsets
-                .iter()
-                .fold(Subset { red: 0, blue: 0, green: 0 }, |result, candidate|
-                    Subset {
-                        red: max(result.red, candidate.red),
-                        green: max(result.green, candidate.green),
-                        blue: max(result.blue, candidate.blue),
-                    },
-                ))
-        .map(|s| s.red * s.blue * s.green)
+        .map(|g| g.subsets
+            .iter()
+            .fold(Subset::zero(), |result, candidate| result.max(candidate)))
+        .map(|s| s.product())
         .sum::<u32>()
         .to_string()
 }
