@@ -34,9 +34,9 @@ struct Subset {
 fn one(input: &str) -> String {
     parse(input)
         .iter()
-        .filter(|g|
-            g.subsets.iter().all(|s| s.red <= 12 && s.green <= 13 && s.blue <= 14)
-        )
+        .filter(|g| g.subsets
+            .iter()
+            .all(|s| s.red <= 12 && s.green <= 13 && s.blue <= 14))
         .map(|g| g.id)
         .sum::<u32>()
         .to_string()
@@ -45,13 +45,16 @@ fn one(input: &str) -> String {
 fn two(input: &str) -> String {
     parse(input)
         .iter()
-        .map(|g| g.subsets.iter().fold(Subset { red: 0, blue: 0, green: 0,}, |result, candidate|
-            Subset {
-                red: max(result.red, candidate.red),
-                green: max(result.green, candidate.green),
-                blue: max(result.blue, candidate.blue),
-            }
-        ))
+        .map(|g|
+            g.subsets
+                .iter()
+                .fold(Subset { red: 0, blue: 0, green: 0 }, |result, candidate|
+                    Subset {
+                        red: max(result.red, candidate.red),
+                        green: max(result.green, candidate.green),
+                        blue: max(result.blue, candidate.blue),
+                    },
+                ))
         .map(|s| s.red * s.blue * s.green)
         .sum::<u32>()
         .to_string()
@@ -62,7 +65,15 @@ fn parse(input: &str) -> Vec<Game> {
         .lines()
         .map(|line| -> Game {
             Game {
-                id: line.split(": ").next().expect("no semicolon").split(" ").last().expect("no space").parse().expect("not a number"),
+                id: line
+                    .split(": ")
+                    .next()
+                    .expect("no semicolon")
+                    .split(' ')
+                    .last()
+                    .expect("no space")
+                    .parse()
+                    .expect("not a number"),
                 subsets: line
                     .split(": ")
                     .last()
@@ -74,11 +85,11 @@ fn parse(input: &str) -> Vec<Game> {
                             .map(|s| -> (&str, u32) {
                                 (
                                     s
-                                        .split(" ")
+                                        .split(' ')
                                         .last()
                                         .expect("expect a space"),
                                     s
-                                        .split(" ")
+                                        .split(' ')
                                         .next()
                                         .expect("expect a space")
                                         .parse()
