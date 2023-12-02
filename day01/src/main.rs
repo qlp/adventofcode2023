@@ -1,4 +1,6 @@
 const INPUT: &str = include_str!("input.txt");
+const EXAMPLE_1: &str = include_str!("example-1.txt");
+const EXAMPLE_2: &str = include_str!("example-2.txt");
 
 const NUMBERS: [&str; 20] = [
     "this_will_never_match",
@@ -24,7 +26,9 @@ const NUMBERS: [&str; 20] = [
 ];
 
 fn main() {
+    print_answer("one (example)", &one(EXAMPLE_1), "142");
     print_answer("one", &one(INPUT), "54450");
+    print_answer("two (example)", &two(EXAMPLE_2), "281");
     print_answer("two", &two(INPUT), "54265");
 }
 
