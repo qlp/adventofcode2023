@@ -6,9 +6,9 @@ const EXAMPLE: &str = include_str!("example.txt");
 
 fn main() {
     print_answer("one (example)", &one(EXAMPLE), "4361");
-    print_answer("one", &one(INPUT), "2061");
-    // print_answer("two (example)", &two(EXAMPLE), "2286");
-    // print_answer("two", &two(INPUT), "72596");
+    print_answer("one", &one(INPUT), "537832");
+    print_answer("two (example)", &two(EXAMPLE), "467835");
+    print_answer("two", &two(INPUT), "81939900");
 }
 
 fn print_answer(name: &str, actual: &str, expected: &str) {
@@ -43,10 +43,6 @@ fn one(input: &str) -> String {
                 _ => false
             };
 
-            dbg!(coordinate);
-            dbg!(item);
-            dbg!(result);
-
             result
         })
         .map(|(_, item)| match item {
@@ -55,6 +51,52 @@ fn one(input: &str) -> String {
         })
         .sum::<u32>()
         .to_string()
+}
+
+fn two(input: &str) -> String {
+    let world = parse(input);
+
+    let gear_to_number: Vec<GearToNumber> = world
+        .items
+        .iter()
+        .flat_map(|(coordinate, item)| {
+            match item {
+                NUMBER(number) => {
+                    let coordinates: Vec<Coordinate> = candidate_coordinates(coordinate, number.clone());
+
+                    coordinates.iter().filter(|coordinate| {
+                        match world.items.get(&coordinate) {
+                            None => false,
+                            Some(item) =>
+                                match item {
+                                    SYMBOL('*') => true,
+                                    _ => false,
+                                }
+                        }
+                    })
+                        .map(|&gear| GearToNumber { gear: gear, number: number.clone()})
+                        .collect()
+                }
+                _ => Vec::new()
+            }
+        })
+        .collect();
+
+    let mut gear_to_numbers: HashMap<Coordinate, Vec<u32>> = HashMap::new();
+
+    for gtn in gear_to_number {
+        let numbers = gear_to_numbers.entry(gtn.gear).or_insert_with(|| Vec::new());
+        numbers.push(gtn.number)
+    }
+
+    gear_to_numbers
+        .iter()
+        .filter(|(_, numbers)| numbers.len() == 2)
+        .map(|(_, numbers)| numbers.iter().fold(0, |result, &number| if result == 0 { number } else { result * number}))
+        .sum::<u32>()
+        .to_string()
+
+    // String::new()
 }
 
 fn candidate_coordinates(coordinate: &Coordinate, number: u32) -> Vec<Coordinate> {
@@ -110,6 +152,13 @@ fn parse(input: &str) -> World {
 
 #[derive(Debug)]
 #[derive(PartialEq, Eq, Hash)]
+struct GearToNumber {
+    gear: Coordinate,
+    number: u32,
+}
+
+#[derive(Debug)]
+#[derive(PartialEq, Eq, Hash, Copy, Clone)]
 struct Coordinate {
     x: u32,
     y: u32,
@@ -126,3 +175,4 @@ enum Item {
 struct World {
     items: HashMap<Coordinate, Item>,
 }
+
