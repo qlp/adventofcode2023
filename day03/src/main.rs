@@ -25,25 +25,23 @@ fn one(input: &str) -> String {
         .items
         .iter()
         .filter(|(coordinate, item)| {
-            let result = match item {
+            match item {
                 NUMBER(number) => {
-                    let coordinates: Vec<Coordinate> = candidate_coordinates(coordinate, number.clone());
-
-                    coordinates.iter().any(|coordinate| {
-                        match world.items.get(&coordinate) {
-                            None => false,
-                            Some(item) =>
-                                match item {
-                                    SYMBOL(_) => true,
-                                    _ => false,
-                                }
-                        }
-                    })
+                    candidate_coordinates(coordinate, number)
+                        .iter()
+                        .any(|coordinate| {
+                            match world.items.get(&coordinate) {
+                                None => false,
+                                Some(item) =>
+                                    match item {
+                                        SYMBOL(_) => true,
+                                        _ => false,
+                                    }
+                            }
+                        })
                 }
                 _ => false
-            };
-
-            result
+            }
         })
         .map(|(_, item)| match item {
             NUMBER(number) => number.clone(),
@@ -53,28 +51,29 @@ fn one(input: &str) -> String {
         .to_string()
 }
 
+const GEAR: char = '*';
+
 fn two(input: &str) -> String {
     let world = parse(input);
 
-    let gear_to_number: Vec<GearToNumber> = world
+    let number_to_gear: Vec<NumberToGear> = world
         .items
         .iter()
         .flat_map(|(coordinate, item)| {
             match item {
                 NUMBER(number) => {
-                    let coordinates: Vec<Coordinate> = candidate_coordinates(coordinate, number.clone());
-
-                    coordinates.iter().filter(|coordinate| {
-                        match world.items.get(&coordinate) {
-                            None => false,
-                            Some(item) =>
-                                match item {
-                                    SYMBOL('*') => true,
-                                    _ => false,
-                                }
-                        }
-                    })
-                        .map(|&gear| GearToNumber { gear: gear, number: number.clone()})
+                    candidate_coordinates(coordinate, number).iter()
+                        .filter(|coordinate| {
+                            match world.items.get(&coordinate) {
+                                None => false,
+                                Some(item) =>
+                                    match item {
+                                        SYMBOL(GEAR) => true,
+                                        _ => false,
+                                    }
+                            }
+                        })
+                        .map(|gear| NumberToGear { number: number.clone(), gear: gear.clone() })
                         .collect()
                 }
                 _ => Vec::new()
@@ -84,31 +83,28 @@ fn two(input: &str) -> String {
 
     let mut gear_to_numbers: HashMap<Coordinate, Vec<u32>> = HashMap::new();
 
-    for gtn in gear_to_number {
+    for gtn in number_to_gear {
         let numbers = gear_to_numbers.entry(gtn.gear).or_insert_with(|| Vec::new());
         numbers.push(gtn.number)
     }
 
     gear_to_numbers
         .iter()
-        .filter(|(_, numbers)| numbers.len() == 2)
-        .map(|(_, numbers)| numbers.iter().fold(0, |result, &number| if result == 0 { number } else { result * number}))
+        .map(|(_, numbers)| if numbers.len() == 2 { numbers[0] * numbers[1] } else { 0 })
         .sum::<u32>()
         .to_string()
-
-    // String::new()
 }
 
-fn candidate_coordinates(coordinate: &Coordinate, number: u32) -> Vec<Coordinate> {
-    (if coordinate.x == 0 { 0 } else { coordinate.x - 1 }..=(coordinate.x + number.to_string().len() as u32))
-        .map(|x|candidate_y_coordinates(&coordinate, x))
+fn candidate_coordinates(coordinate: &Coordinate, number: &u32) -> Vec<Coordinate> {
+    (coordinate.x.saturating_sub(1)..=(coordinate.x + number.ilog10() + 1))
+        .map(|x| candidate_y_coordinates(&coordinate, x))
         .flatten()
         .collect()
 }
 
 fn candidate_y_coordinates(coordinate: &Coordinate, x: u32) -> Vec<Coordinate> {
-    (if coordinate.y == 0 { 0 } else { coordinate.y - 1 }..=(coordinate.y + 1)).map(|y|
-        Coordinate { x: x.clone(), y: y.clone() }
+    (coordinate.y.saturating_sub(1)..=(coordinate.y + 1)).map(|y|
+        Coordinate { x, y }
     ).collect()
 }
 
@@ -123,24 +119,22 @@ fn parse(input: &str) -> World {
 
                 for (column_index, char) in line.chars().enumerate() {
                     match char {
-                        '.' => if !buffer.is_empty() {
-                            items.push((Coordinate { x: (column_index - buffer.len()) as u32, y: row_index as u32 }, NUMBER(buffer.parse().expect("expect a number"))));
-                            buffer.clear()
-                        },
                         '0'..='9' => buffer.push(char),
                         _ => {
+                            if char != '.' {
+                                items.push((Coordinate { x: column_index as u32, y: row_index as u32 }, SYMBOL(char)))
+                            }
+
                             if !buffer.is_empty() {
                                 items.push((Coordinate { x: (column_index - buffer.len()) as u32, y: row_index as u32 }, NUMBER(buffer.parse().expect("expect a number"))));
                                 buffer.clear()
                             }
-                            items.push((Coordinate { x: column_index as u32, y: row_index as u32 }, SYMBOL(char)))
                         }
                     }
                 }
 
                 if !buffer.is_empty() {
                     items.push((Coordinate { x: (line.len() - buffer.len()) as u32, y: row_index as u32 }, NUMBER(buffer.parse().expect("expect a number"))));
-                    buffer.clear()
                 }
 
                 items
@@ -152,7 +146,7 @@ fn parse(input: &str) -> World {
 
 #[derive(Debug)]
 #[derive(PartialEq, Eq, Hash)]
-struct GearToNumber {
+struct NumberToGear {
     gear: Coordinate,
     number: u32,
 }
