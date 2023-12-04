@@ -3,7 +3,7 @@ const EXAMPLE: &str = include_str!("example.txt");
 
 fn main() {
     print_answer("one (example)", &one(EXAMPLE), "13");
-    print_answer("one", &one(INPUT), "537832");
+    print_answer("one", &one(INPUT), "23028");
     print_answer("two (example)", &two(EXAMPLE), "30");
     print_answer("two", &two(INPUT), "9236992");
 }
@@ -33,11 +33,9 @@ fn two(input: &str) -> String {
         let start_index = index + 1;
         let copies = card.copies;
 
-        if winning > 0 {
-            for copy_index in start_index..(start_index + winning) {
-                if let Some(card_to_copy) = cards.get_mut(copy_index) {
-                    card_to_copy.add_copy(copies)
-                }
+        for copy_index in start_index..(start_index + winning) {
+            if let Some(card_to_copy) = cards.get_mut(copy_index) {
+                card_to_copy.add_copy(copies)
             }
         }
     }
@@ -53,9 +51,7 @@ fn parse(input: &str) -> Vec<Card> {
     input
         .lines()
         .map(|line| {
-            let (card, contents) = line.split_once(':').expect("expect a ':");
-            let (_, id) = card.split_once(' ').expect("expect a ' ");
-            let id: u32 = id.trim().parse().expect("expect a number");
+            let (_, contents) = line.split_once(':').expect("expect a ':");
             let (numbers, winning) = contents.split_once(" | ").expect("expect a separator");
             let numbers: Vec<u32> = numbers
                 .trim()
@@ -71,7 +67,6 @@ fn parse(input: &str) -> Vec<Card> {
                 .collect();
 
             Card {
-                id,
                 numbers,
                 winning,
                 copies: 1,
@@ -82,7 +77,6 @@ fn parse(input: &str) -> Vec<Card> {
 
 #[derive(Debug)]
 struct Card {
-    id: u32,
     numbers: Vec<u32>,
     winning: Vec<u32>,
     copies: u32,
