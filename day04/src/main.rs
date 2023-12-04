@@ -35,17 +35,18 @@ fn two(input: &str) -> String {
 
         if winning > 0 {
             for copy_index in start_index..(start_index + winning) {
-                match cards.get(copy_index) {
-                    Some(card_to_copy) => cards[copy_index] = card_to_copy.add_copy(copies),
-                    None => ()
+                if let Some(card_to_copy) = cards.get_mut(copy_index) {
+                    card_to_copy.add_copy(copies)
                 }
             }
         }
     }
 
-    dbg!(&cards);
-
-    cards.iter().map(|card| card.copies).sum::<u32>().to_string()
+    cards
+        .iter()
+        .map(|card| card.copies)
+        .sum::<u32>()
+        .to_string()
 }
 
 fn parse(input: &str) -> Vec<Card> {
@@ -56,10 +57,25 @@ fn parse(input: &str) -> Vec<Card> {
             let (_, id) = card.split_once(' ').expect("expect a ' ");
             let id: u32 = id.trim().parse().expect("expect a number");
             let (numbers, winning) = contents.split_once(" | ").expect("expect a separator");
-            let numbers: Vec<u32> = numbers.trim().split(' ').filter(|number| !number.is_empty()).map(|number| number.parse().expect("expect a number")).collect();
-            let winning: Vec<u32> = winning.trim().split(' ').filter(|winning| !winning.is_empty()).map(|winning| winning.parse().expect("expect a number")).collect();
+            let numbers: Vec<u32> = numbers
+                .trim()
+                .split(' ')
+                .filter(|number| !number.is_empty())
+                .map(|number| number.parse().expect("expect a number"))
+                .collect();
+            let winning: Vec<u32> = winning
+                .trim()
+                .split(' ')
+                .filter(|winning| !winning.is_empty())
+                .map(|winning| winning.parse().expect("expect a number"))
+                .collect();
 
-            Card { id, numbers, winning, copies: 1 }
+            Card {
+                id,
+                numbers,
+                winning,
+                copies: 1,
+            }
         })
         .collect()
 }
@@ -81,24 +97,19 @@ impl Card {
     }
 
     fn points(&self) -> u32 {
-        let count = self.numbers
+        let count = self
+            .numbers
             .iter()
             .filter(|&number| self.winning.contains(number))
             .count() as u32;
 
-        if count == 0 {
-            0
-        } else {
-            2u32.pow(count - 1)
+        match count {
+            0 => 0,
+            n => 2u32.pow(n - 1),
         }
     }
 
-    fn add_copy(&self, count: u32) -> Card {
-        Card {
-            id: self.id,
-            numbers: self.numbers.clone(),
-            winning: self.winning.clone(),
-            copies: self.copies + count,
-        }
+    fn add_copy(&mut self, count: u32) {
+        self.copies += count;
     }
 }
