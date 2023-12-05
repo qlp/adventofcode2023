@@ -1,5 +1,6 @@
+use std::ops::Range;
+
 use rayon::prelude::*;
-use std::collections::HashSet;
 
 const INPUT: &str = include_str!("input.txt");
 const EXAMPLE: &str = include_str!("example.txt");
@@ -32,55 +33,6 @@ fn one(input: &str) -> String {
 
 fn two(input: &str) -> String {
     let world = parse(input);
-
-    let significant_numbers: HashSet<u64> = world
-        .categories
-        .iter()
-        .flat_map(|c| c.ranges.clone())
-        .flat_map(|r| vec![r.from, r.from + r.size, r.to, r.to + r.size])
-        .collect();
-
-    // dbg!(&significant_numbers);
-
-    let mut points: Vec<u64> = Vec::from_iter(significant_numbers.iter().copied());
-    points.sort();
-
-    let ranges: Vec<Range> = (1..points.len())
-        .map(|i| (points[i - 1], points[i]))
-        .map(|(from, to)| Range {
-            from: from,
-            to: world.location(from),
-            size: to - from,
-        })
-        .collect();
-
-    let seeds: Vec<u64> = (1..world.seeds.len())
-        .step_by(2)
-        .map(|i| (world.seeds[i - 1], world.seeds[i]))
-        .map(|(start, length)| start..(start + length))
-        .flat_map(|range| range.into_iter().collect::<Vec<u64>>())
-        .collect();
-
-    // let world = World {
-    //     seeds: seeds.clone(),
-    //     categories: vec![Category {
-    //         from: String::from("seed"),
-    //         to: String::from("location"),
-    //         ranges,
-    //     }],
-    // };
-    //
-    // dbg!(&world);
-
-    // seeds
-    //     .iter()
-    //     .map(|seed| {
-    //         dbg!(&seed);
-    //         dbg!(world.location(seed.clone()))
-    //     })
-    //     .min()
-    //     .expect("at least one")
-    //     .to_string()
 
     (1..world.seeds.len())
         .step_by(2)
@@ -127,13 +79,13 @@ fn parse(input: &str) -> World {
                 .split_once("-to-")
                 .expect("to separator");
 
-            let ranges: Vec<Range> = c
+            let ranges: Vec<MyRange> = c
                 .iter()
                 .skip(1)
                 .map(|r| {
                     let numbers: Vec<&str> = r.split(' ').collect();
 
-                    Range {
+                    MyRange {
                         to: numbers
                             .first()
                             .expect("expect 1/3 number")
@@ -156,7 +108,7 @@ fn parse(input: &str) -> World {
             Category {
                 from: from.to_string(),
                 to: to.to_string(),
-                ranges,
+                ranges: Ranges { ranges },
             }
         })
         .collect();
@@ -196,25 +148,54 @@ impl World {
 struct Category {
     from: String,
     to: String,
-    ranges: Vec<Range>,
+    ranges: Ranges,
 }
 
 impl Category {
     fn next(&self, number: u64) -> u64 {
-        match self
-            .ranges
-            .iter()
-            .find(|r| number >= r.from && number < (r.from + r.size))
-        {
-            None => number,
-            Some(range) => number + range.to - range.from,
-        }
+        self.ranges.next(number)
     }
 }
 
+#[derive(Debug, Clone)]
+struct Ranges {
+    ranges: Vec<MyRange>,
+}
+
+impl Ranges {
+    fn next(&self, number: u64) -> u64 {
+        match self.ranges.iter().find(|r| r.range().contains(&number)) {
+            None => number,
+            Some(range) => range.add(number),
+        }
+    }
+    //
+    // fn combine(&self, other: Self) -> Self {
+    //     let mut result = self.ranges.clone();
+    //
+    //     other.ranges.iter().for_each(|o| {
+    //         if !result.iter().any(|r| r.overlaps(o)) {
+    //             result.push(*o);
+    //         }
+    //     });
+    //
+    //     Ranges { ranges: result }
+    // }
+}
+
 #[derive(Debug, Copy, Clone)]
-struct Range {
+struct MyRange {
     from: u64,
     to: u64,
     size: u64,
+}
+
+impl MyRange {
+    fn add(&self, number: u64) -> u64 {
+        self.to + number - self.from
+    }
+
+    fn range(&self) -> Range<u64> {
+        self.from..(self.from + self.size)
+    }
 }
