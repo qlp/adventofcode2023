@@ -8,7 +8,7 @@ fn main() {
     print_answer("one (example)", &one(EXAMPLE), "35");
     print_answer("one", &one(INPUT), "579439039");
     print_answer("two (example)", &two(EXAMPLE), "46");
-    print_answer("two", &two(INPUT), "9236992");
+    print_answer("two", &two(INPUT), "7873084");
 }
 
 fn print_answer(name: &str, actual: &str, expected: &str) {
