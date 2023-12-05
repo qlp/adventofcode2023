@@ -1,11 +1,14 @@
+use rayon::prelude::*;
+use std::collections::HashSet;
+
 const INPUT: &str = include_str!("input.txt");
 const EXAMPLE: &str = include_str!("example.txt");
 
 fn main() {
     print_answer("one (example)", &one(EXAMPLE), "35");
-    print_answer("one", &one(INPUT), "23028");
-    // print_answer("two (example)", &two(EXAMPLE), "30");
-    // print_answer("two", &two(INPUT), "9236992");
+    print_answer("one", &one(INPUT), "579439039");
+    print_answer("two (example)", &two(EXAMPLE), "46");
+    print_answer("two", &two(INPUT), "9236992");
 }
 
 fn print_answer(name: &str, actual: &str, expected: &str) {
@@ -27,17 +30,82 @@ fn one(input: &str) -> String {
         .to_string()
 }
 
-// fn two(input: &str) -> String {
-//     String::new()
-// }
+fn two(input: &str) -> String {
+    let world = parse(input);
+
+    let significant_numbers: HashSet<u64> = world
+        .categories
+        .iter()
+        .flat_map(|c| c.ranges.clone())
+        .flat_map(|r| vec![r.from, r.from + r.size, r.to, r.to + r.size])
+        .collect();
+
+    // dbg!(&significant_numbers);
+
+    let mut points: Vec<u64> = Vec::from_iter(significant_numbers.iter().copied());
+    points.sort();
+
+    let ranges: Vec<Range> = (1..points.len())
+        .map(|i| (points[i - 1], points[i]))
+        .map(|(from, to)| Range {
+            from: from,
+            to: world.location(from),
+            size: to - from,
+        })
+        .collect();
+
+    let seeds: Vec<u64> = (1..world.seeds.len())
+        .step_by(2)
+        .map(|i| (world.seeds[i - 1], world.seeds[i]))
+        .map(|(start, length)| start..(start + length))
+        .flat_map(|range| range.into_iter().collect::<Vec<u64>>())
+        .collect();
+
+    // let world = World {
+    //     seeds: seeds.clone(),
+    //     categories: vec![Category {
+    //         from: String::from("seed"),
+    //         to: String::from("location"),
+    //         ranges,
+    //     }],
+    // };
+    //
+    // dbg!(&world);
+
+    // seeds
+    //     .iter()
+    //     .map(|seed| {
+    //         dbg!(&seed);
+    //         dbg!(world.location(seed.clone()))
+    //     })
+    //     .min()
+    //     .expect("at least one")
+    //     .to_string()
+
+    (1..world.seeds.len())
+        .step_by(2)
+        .map(|i| (world.seeds[i - 1], world.seeds[i]))
+        .map(|(start, length)| start..(start + length))
+        .map(|range| {
+            println!("range: {}-{}", range.start, range.end);
+            range
+                .into_par_iter()
+                .map(|seed| world.location(seed))
+                .min()
+                .expect("at least one for {range}")
+        })
+        .min()
+        .expect("at least one")
+        .to_string()
+}
 
 fn parse(input: &str) -> World {
     let seeds = input.lines().next().expect("expect at least one line");
-    let categories: Vec<Vec<&str>> = dbg!(input
+    let categories: Vec<Vec<&str>> = input
         .split("\n\n")
         .skip(1)
         .map(|l| l.lines().collect())
-        .collect());
+        .collect();
 
     let seeds = seeds
         .split_once(": ")
@@ -93,7 +161,7 @@ fn parse(input: &str) -> World {
         })
         .collect();
 
-    dbg!(World { seeds, categories })
+    World { seeds, categories }
 }
 
 #[derive(Debug)]
@@ -144,7 +212,7 @@ impl Category {
     }
 }
 
-#[derive(Debug)]
+#[derive(Debug, Copy, Clone)]
 struct Range {
     from: u64,
     to: u64,
