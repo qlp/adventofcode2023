@@ -1,6 +1,4 @@
-use roots::{find_roots_quadratic, Roots};
 use std::ops::Range;
-use std::panic::panic_any;
 
 const INPUT: &str = include_str!("input.txt");
 const EXAMPLE: &str = include_str!("example.txt");
@@ -97,25 +95,40 @@ struct Race {
 
 impl Race {
     fn winning(&self) -> Range<u64> {
-        let answer = find_roots_quadratic(-1f64, self.time as f64, -(self.distance as f64));
+        // let answer = find_roots_quadratic(-1f64, self.time as f64, -(self.distance as f64));
 
-        match answer {
-            Roots::No(_) => panic_any("cannot win (0)"),
-            Roots::One(_) => panic_any("cannot win (1)"),
-            Roots::Two(points) => Range {
-                start: points[0] as u64,
-                end: if points[1] == (points[1] as u64 as f64) {
-                    points[1] as u64 - 1
-                } else {
-                    points[1] as u64
-                },
+        let x = find_roots(-1 as f64, self.time as f64, -(self.distance as f64));
+
+        let from = x.0.expect("0");
+        let to = x.1.expect("1");
+
+        Range {
+            start: from as u64,
+            end: if to == (to as u64 as f64) {
+                to as u64 - 1
+            } else {
+                to as u64
             },
-            Roots::Three(_) => panic_any("unexpected (3)"),
-            Roots::Four(_) => panic_any("unexpected (4)"),
         }
     }
 
     fn winning_count(&self) -> u64 {
         self.winning().count() as u64
+    }
+}
+
+fn find_roots(a: f64, b: f64, c: f64) -> (Option<f64>, Option<f64>) {
+    let discriminant = b * b - 4.0 * a * c;
+
+    if discriminant < 0.0 {
+        // No real roots
+        (None, None)
+    } else {
+        let sqrt_discriminant = discriminant.sqrt();
+
+        let root1 = (-b + sqrt_discriminant) / (2.0 * a);
+        let root2 = (-b - sqrt_discriminant) / (2.0 * a);
+
+        (Some(root1), Some(root2))
     }
 }
