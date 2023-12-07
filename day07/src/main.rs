@@ -1,4 +1,4 @@
-use std::collections::HashMap;
+use std::collections::{HashMap, HashSet};
 use std::ops::Shl;
 use std::panic::panic_any;
 
@@ -118,17 +118,15 @@ fn type_value(cards: &str, joker: bool) -> u32 {
 }
 
 fn permutations(cards: String) -> Vec<String> {
-    match cards.find('J') {
-        None => vec![cards.to_string()],
-        Some(i) => "AKQT987654321"
-            .chars()
-            .flat_map(|c| {
-                let mut copy = cards.to_string();
+    let characters: HashSet<char> = HashSet::from_iter(cards.chars());
 
-                copy.replace_range(i..(i + 1), &c.to_string());
-
-                permutations(copy)
-            })
+    match (characters.len(), characters.contains(&'J')) {
+        (0..=1, _) => vec![cards],
+        (_, false) => vec![cards],
+        (_, true) => characters
+            .iter()
+            .filter(|c| *c != &'J')
+            .flat_map(|c| permutations(cards.replacen("J", &c.to_string(), 1)))
             .collect(),
     }
 }
