@@ -20,27 +20,11 @@ fn print_answer(name: &str, actual: &str, expected: &str) {
 }
 
 fn one(input: &str) -> String {
-    let mut hands = parse(input, false).hands;
-    hands.sort_by_key(|h| h.cards);
-
-    hands
-        .iter()
-        .enumerate()
-        .map(|(index, hand)| hand.bid * (index as u64 + 1))
-        .sum::<u64>()
-        .to_string()
+    parse(input, false).answer()
 }
 
 fn two(input: &str) -> String {
-    let mut hands = parse(input, true).hands;
-    hands.sort_by_key(|h| h.cards);
-
-    hands
-        .iter()
-        .enumerate()
-        .map(|(index, hand)| hand.bid * (index as u64 + 1))
-        .sum::<u64>()
-        .to_string()
+    parse(input, true).answer()
 }
 
 const NUMBER_OF_CARD_IN_HAND: usize = 5;
@@ -91,20 +75,22 @@ fn type_value(cards: &str, joker: bool) -> u32 {
                 acc
             });
 
-            let max = map
+            let max_same_kind_count = map
                 .iter()
                 .max_by_key(|(_, v)| v.clone())
                 .expect("at least one")
                 .1;
 
-            match map.len() {
+            let card_kind_count = map.len();
+
+            match card_kind_count {
                 1 => 7,
-                2 => match max {
+                2 => match max_same_kind_count {
                     4 => 6,
                     3 => 5,
                     _ => panic_any("expected 4 or 3"),
                 },
-                3 => match max {
+                3 => match max_same_kind_count {
                     3 => 4,
                     2 => 3,
                     _ => panic_any("expected 3 or 2"),
@@ -126,7 +112,7 @@ fn permutations(cards: String) -> Vec<String> {
         (_, true) => characters
             .iter()
             .filter(|c| *c != &'J')
-            .flat_map(|c| permutations(cards.replacen("J", &c.to_string(), 1)))
+            .flat_map(|c| permutations(cards.replacen('J', &c.to_string(), 1)))
             .collect(),
     }
 }
@@ -134,6 +120,21 @@ fn permutations(cards: String) -> Vec<String> {
 #[derive(Debug, Clone)]
 struct World {
     hands: Vec<Hand>,
+}
+
+impl World {
+    fn answer(&self) -> String {
+        let mut hands = self.hands.clone();
+
+        hands.sort_by_key(|h| h.cards);
+
+        hands
+            .iter()
+            .enumerate()
+            .map(|(index, hand)| hand.bid * (index as u64 + 1))
+            .sum::<u64>()
+            .to_string()
+    }
 }
 
 #[derive(Debug, Clone)]
