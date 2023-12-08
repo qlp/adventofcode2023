@@ -1,6 +1,7 @@
 use std::collections::HashMap;
 
-use crate::Move::{LEFT, RIGHT};
+use crate::Move::{Left, Right};
+use crate::Part::{One, Two};
 
 const INPUT: &str = include_str!("input.txt");
 const EXAMPLE_1: &str = include_str!("example-1.txt");
@@ -12,7 +13,7 @@ fn main() {
     print_answer("one (example 2)", &one(EXAMPLE_2), "6");
     print_answer("one", &one(INPUT), "21251");
     print_answer("two (example)", &two(EXAMPLE_3), "6");
-    print_answer("two", &two(INPUT), "");
+    print_answer("two", &two(INPUT), "11678319315857");
 }
 
 fn print_answer(name: &str, actual: &str, expected: &str) {
@@ -23,56 +24,62 @@ fn print_answer(name: &str, actual: &str, expected: &str) {
 }
 
 fn one(input: &str) -> String {
-    let world = parse(input);
-    let moves = world.moves.clone();
-
-    let mut steps = 0usize;
-    let mut current = String::from("AAA");
-
-    while current != "ZZZ" {
-        let next_move_index = steps % moves.len();
-        let next_move = moves.get(next_move_index).expect("expect node to exist");
-        current = world.go(current, next_move);
-        steps += 1;
-    }
-
-    steps.to_string()
+    parse(input, One)
+        .find(&Position {
+            name: "AAA".to_string(),
+            steps: 0,
+        })
+        .steps
+        .to_string()
 }
 
 fn two(input: &str) -> String {
-    let world = parse(input);
-    let moves = world.moves.clone();
+    let world = parse(input, Two);
 
-    let mut steps = 0usize;
-    let mut current: Vec<String> = world
+    world
         .nodes
         .values()
         .map(|v| v.name.clone())
         .filter(|n| n.ends_with('A'))
-        .collect();
-
-    while !current.iter().all(|c| c.ends_with('Z')) {
-        let next_move_index = steps % moves.len();
-        let next_move = moves.get(next_move_index).expect("expect node to exist");
-        current = current
-            .iter()
-            .map(|c| world.go(c.clone(), next_move))
-            .collect();
-        steps += 1;
-    }
-
-    steps.to_string()
+        .map(|n| Position { name: n, steps: 0 })
+        .map(|p| world.find(&p))
+        .map(|p| p.steps)
+        .reduce(lcm)
+        .expect("at least on")
+        .to_string()
 }
 
-fn parse(input: &str) -> World {
+fn lcm(first: u64, second: u64) -> u64 {
+    first * second / gcd(first, second)
+}
+
+fn gcd(first: u64, second: u64) -> u64 {
+    let mut max = first;
+    let mut min = second;
+    if min > max {
+        std::mem::swap(&mut max, &mut min);
+    }
+
+    loop {
+        let res = max % min;
+        if res == 0 {
+            return min;
+        }
+
+        max = min;
+        min = res;
+    }
+}
+
+fn parse(input: &str, part: Part) -> World {
     let (moves, nodes) = input.split_once("\n\n").expect("double newline");
 
     World {
         moves: moves
             .chars()
             .map(|c| match c {
-                'L' => LEFT,
-                'R' => RIGHT,
+                'L' => Left,
+                'R' => Right,
                 _ => panic!("expect L or R"),
             })
             .collect(),
@@ -86,6 +93,7 @@ fn parse(input: &str) -> World {
                 (name.clone(), Node { name, left, right })
             })
             .collect(),
+        part,
     }
 }
 
@@ -93,23 +101,55 @@ fn parse(input: &str) -> World {
 struct World {
     moves: Vec<Move>,
     nodes: HashMap<String, Node>,
+    part: Part,
 }
 
 impl World {
-    fn go(&self, from: String, to: &Move) -> String {
-        let destination = self.nodes.get(&*from).expect("expect from");
+    fn go(&self, from: &String, to: &Move) -> String {
+        let destination = self.nodes.get(from).expect("expect from");
 
         match to {
-            LEFT => destination.left.clone(),
-            RIGHT => destination.right.clone(),
+            Left => destination.left.clone(),
+            Right => destination.right.clone(),
+        }
+    }
+
+    fn find(&self, from: &Position) -> Position {
+        let mut steps = from.steps;
+        let mut name = from.name.clone();
+        let number_of_moves = self.moves.len() as u64;
+
+        while steps == from.steps || !self.condition(&name) {
+            let next_move_index = steps % number_of_moves;
+            let next_move = self
+                .moves
+                .get(next_move_index as usize)
+                .expect("expect node to exist");
+            name = self.go(&name, next_move);
+            steps += 1;
+        }
+
+        Position { name, steps }
+    }
+
+    fn condition(&self, name: &String) -> bool {
+        match self.part {
+            One => name == "ZZZ",
+            Two => name.ends_with('Z'),
         }
     }
 }
 
 #[derive(Debug, Copy, Clone)]
 enum Move {
-    LEFT,
-    RIGHT,
+    Left,
+    Right,
+}
+
+#[derive(Debug, Clone)]
+enum Part {
+    One,
+    Two,
 }
 
 #[derive(Debug, Clone)]
@@ -117,4 +157,10 @@ struct Node {
     name: String,
     left: String,
     right: String,
+}
+
+#[derive(Debug, Clone, Eq, PartialEq, Hash)]
+struct Position {
+    name: String,
+    steps: u64,
 }
