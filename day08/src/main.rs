@@ -5,13 +5,14 @@ use crate::Move::{LEFT, RIGHT};
 const INPUT: &str = include_str!("input.txt");
 const EXAMPLE_1: &str = include_str!("example-1.txt");
 const EXAMPLE_2: &str = include_str!("example-2.txt");
+const EXAMPLE_3: &str = include_str!("example-3.txt");
 
 fn main() {
     print_answer("one (example 1)", &one(EXAMPLE_1), "2");
     print_answer("one (example 2)", &one(EXAMPLE_2), "6");
-    print_answer("one", &one(INPUT), "");
-    // print_answer("two (example)", &two(EXAMPLE_1), "");
-    // print_answer("two", &two(INPUT), "");
+    print_answer("one", &one(INPUT), "21251");
+    print_answer("two (example)", &two(EXAMPLE_3), "6");
+    print_answer("two", &two(INPUT), "");
 }
 
 fn print_answer(name: &str, actual: &str, expected: &str) {
@@ -39,7 +40,28 @@ fn one(input: &str) -> String {
 }
 
 fn two(input: &str) -> String {
-    String::new()
+    let world = parse(input);
+    let moves = world.moves.clone();
+
+    let mut steps = 0usize;
+    let mut current: Vec<String> = world
+        .nodes
+        .values()
+        .map(|v| v.name.clone())
+        .filter(|n| n.ends_with('A'))
+        .collect();
+
+    while !current.iter().all(|c| c.ends_with('Z')) {
+        let next_move_index = steps % moves.len();
+        let next_move = moves.get(next_move_index).expect("expect node to exist");
+        current = current
+            .iter()
+            .map(|c| world.go(c.clone(), next_move))
+            .collect();
+        steps += 1;
+    }
+
+    steps.to_string()
 }
 
 fn parse(input: &str) -> World {
