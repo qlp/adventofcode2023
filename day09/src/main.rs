@@ -3,9 +3,9 @@ const EXAMPLE: &str = include_str!("example.txt");
 
 fn main() {
     print_answer("one (example)", &one(EXAMPLE), "114");
-    print_answer("one", &one(INPUT), "");
-    // print_answer("two (example)", &two(EXAMPLE), "");
-    // print_answer("two", &two(INPUT), "");
+    print_answer("one", &one(INPUT), "1743490457");
+    print_answer("two (example)", &two(EXAMPLE), "2");
+    print_answer("two", &two(INPUT), "");
 }
 
 fn print_answer(name: &str, actual: &str, expected: &str) {
@@ -25,7 +25,12 @@ fn one(input: &str) -> String {
 }
 
 fn two(input: &str) -> String {
-    String::new()
+    parse(input)
+        .values
+        .iter()
+        .map(|v| v.prev())
+        .sum::<i64>()
+        .to_string()
 }
 
 fn parse(input: &str) -> World {
@@ -53,7 +58,7 @@ struct Value {
 }
 
 impl Value {
-    fn next(&self) -> i64 {
+    fn diffs(&self) -> Vec<Vec<i64>> {
         let mut diffs: Vec<Vec<i64>> = Vec::new();
         diffs.push(self.history.clone());
 
@@ -65,6 +70,22 @@ impl Value {
             diffs.push(next)
         }
 
-        diffs.iter().map(|d| d.last().expect("at least one")).sum()
+        diffs
+    }
+
+    fn next(&self) -> i64 {
+        self.diffs()
+            .iter()
+            .map(|d| d.last().expect("at least one"))
+            .sum()
+    }
+
+    fn prev(&self) -> i64 {
+        self.diffs()
+            .iter()
+            .rev()
+            .map(|d| d.first().expect("at least one").clone())
+            .reduce(|acc, i| i - acc)
+            .expect("at least one")
     }
 }
