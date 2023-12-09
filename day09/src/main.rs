@@ -5,7 +5,7 @@ fn main() {
     print_answer("one (example)", &one(EXAMPLE), "114");
     print_answer("one", &one(INPUT), "1743490457");
     print_answer("two (example)", &two(EXAMPLE), "2");
-    print_answer("two", &two(INPUT), "");
+    print_answer("two", &two(INPUT), "1053");
 }
 
 fn print_answer(name: &str, actual: &str, expected: &str) {
@@ -64,8 +64,7 @@ impl Value {
 
         while !diffs.last().expect("not empty").iter().all(|v| *v == 0) {
             let last = diffs.last().expect("not empty");
-
-            let next: Vec<i64> = (1..(last.len())).map(|i| last[i] - last[i - 1]).collect();
+            let next: Vec<i64> = (1..last.len()).map(|i| last[i] - last[i - 1]).collect();
 
             diffs.push(next)
         }
@@ -84,7 +83,7 @@ impl Value {
         self.diffs()
             .iter()
             .rev()
-            .map(|d| d.first().expect("at least one").clone())
+            .map(|d| *d.first().expect("at least one"))
             .reduce(|acc, i| i - acc)
             .expect("at least one")
     }
