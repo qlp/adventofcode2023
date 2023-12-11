@@ -1,4 +1,3 @@
-use std::collections::HashMap;
 use std::fmt::{Debug, Display, Formatter, Write};
 
 use crate::Connection::*;
