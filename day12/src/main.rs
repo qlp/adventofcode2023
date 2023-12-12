@@ -1,3 +1,4 @@
+use rayon::prelude::*;
 use std::collections::HashMap;
 
 const INPUT: &str = include_str!("input.txt");
@@ -38,7 +39,7 @@ impl World {
 
     fn candidates(&self) -> u64 {
         self.records
-            .iter()
+            .par_iter()
             .map(|record| {
                 let mut cache: HashMap<CacheKey, u64> = HashMap::new();
                 record.candidates(0, 0, &mut cache)
@@ -92,13 +93,17 @@ impl Record {
 
     fn candidates(&self, from: u32, group_index: usize, cache: &mut HashMap<CacheKey, u64>) -> u64 {
         let group_size = self.groups[group_index];
+        let remaining_groups: u32 = self.groups[group_index + 1..].iter().sum::<u32>();
 
         let mut result = 0;
 
         let mut passed_spring = false;
         let mut from = from;
 
-        while !passed_spring && self.length >= from && (self.length - from) >= group_size {
+        while !passed_spring
+            && self.length - remaining_groups >= from
+            && (self.length - from) >= group_size
+        {
             let mask = (2u128.pow(group_size) - 1) << (self.length - group_size - from);
 
             let final_group = group_index == self.groups.len() - 1;
