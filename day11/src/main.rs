@@ -1,5 +1,4 @@
 use std::collections::HashSet;
-use std::fmt::Display;
 
 const INPUT: &str = include_str!("input.txt");
 const EXAMPLE: &str = include_str!("example.txt");
@@ -63,24 +62,27 @@ impl World {
         }
     }
 
-    fn size(&self) -> Size {
-        let (max_x, max_y) = self
-            .planets
-            .iter()
-            .fold((0, 0), |(x, y), c| (x.max(c.x), y.max(c.y)));
-
-        Size {
-            width: max_x + 1,
-            height: max_y + 1,
+    fn transpose(&self) -> Self {
+        Self {
+            planets: self
+                .planets
+                .iter()
+                .map(|c| Coordinate { x: c.y, y: c.x })
+                .collect(),
         }
     }
 
     fn expand(&self, expansion: u64) -> Self {
-        let size = self.size();
-        let empty_x: Vec<u64> = (0..size.width)
-            .filter(|x| !self.planets.iter().any(|c| c.x == *x))
-            .collect();
-        let empty_y: Vec<u64> = (0..size.height)
+        self.expand_rows(expansion)
+            .transpose()
+            .expand_rows(expansion)
+            .transpose()
+    }
+
+    fn expand_rows(&self, expansion: u64) -> Self {
+        let height = self.planets.iter().fold(0, |max, c| max.max(c.y)) + 1;
+
+        let empty_rows: Vec<u64> = (0..height)
             .filter(|y| !self.planets.iter().any(|c| c.y == *y))
             .collect();
 
@@ -89,12 +91,10 @@ impl World {
                 .planets
                 .iter()
                 .map(|p| {
-                    let x =
-                        p.x + (expansion - 1) * empty_x.iter().filter(|x| *x < &p.x).count() as u64;
-                    let y =
-                        p.y + (expansion - 1) * empty_y.iter().filter(|y| *y < &p.y).count() as u64;
+                    let y = p.y
+                        + (expansion - 1) * empty_rows.iter().filter(|y| *y < &p.y).count() as u64;
 
-                    Coordinate { x, y }
+                    Coordinate { x: p.x, y }
                 })
                 .collect(),
         }
@@ -123,9 +123,4 @@ impl Coordinate {
     fn distance(&self, to: &Coordinate) -> u64 {
         self.x.abs_diff(to.x) + self.y.abs_diff(to.y)
     }
-}
-
-struct Size {
-    width: u64,
-    height: u64,
 }
