@@ -1,13 +1,11 @@
-use std::fmt::{Display, Formatter, Write};
-
 const INPUT: &str = include_str!("input.txt");
 const EXAMPLE: &str = include_str!("example.txt");
 
 fn main() {
-    // print_answer("one (example)", &one(EXAMPLE), "405");
-    // print_answer("one", &one(INPUT), "32035");
+    print_answer("one (example)", &one(EXAMPLE), "405");
+    print_answer("one", &one(INPUT), "32035");
     print_answer("two (example)", &two(EXAMPLE), "400");
-    print_answer("two", &two(INPUT), "24841 is too low");
+    print_answer("two", &two(INPUT), "24847");
 }
 
 fn print_answer(name: &str, actual: &str, expected: &str) {
@@ -44,17 +42,6 @@ impl World {
         Self {
             fields: input.split("\n\n").map(|str| Field::parse(str)).collect(),
         }
-    }
-}
-
-impl Display for World {
-    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
-        self.fields.iter().for_each(|field| {
-            field.fmt(f);
-            f.write_char('\n');
-        });
-
-        Ok(())
     }
 }
 
@@ -162,26 +149,6 @@ impl Field {
                 })
                 .collect(),
         }
-    }
-}
-
-impl Display for Field {
-    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
-        self.rows.iter().for_each(|row| {
-            (0..self.width).for_each(|column| {
-                let mask = 1u32 << (self.width - column - 1);
-                let rock = row & mask != 0;
-                let char = match rock {
-                    true => '#',
-                    false => '.',
-                };
-
-                f.write_char(char);
-            });
-            f.write_char('\n');
-        });
-
-        Ok(())
     }
 }
 
