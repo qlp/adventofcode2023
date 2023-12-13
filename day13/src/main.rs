@@ -1,3 +1,5 @@
+use rayon::prelude::*;
+
 const INPUT: &str = include_str!("input.txt");
 const EXAMPLE: &str = include_str!("example.txt");
 
@@ -18,7 +20,7 @@ fn print_answer(name: &str, actual: &str, expected: &str) {
 fn one(input: &str) -> String {
     World::parse(input)
         .fields
-        .iter()
+        .par_iter()
         .map(|f| f.clean_summary())
         .sum::<u32>()
         .to_string()
@@ -27,7 +29,7 @@ fn one(input: &str) -> String {
 fn two(input: &str) -> String {
     World::parse(input)
         .fields
-        .iter()
+        .par_iter()
         .map(|f| f.smudge_summary())
         .sum::<u32>()
         .to_string()
