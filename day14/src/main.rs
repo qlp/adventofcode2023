@@ -1,14 +1,16 @@
+use bit_set::BitSet;
 use std::collections::HashMap;
-use std::fmt::{Display, Formatter, Write};
+
+use crate::Direction::{East, North, South, West};
 
 const INPUT: &str = include_str!("input.txt");
 const EXAMPLE: &str = include_str!("example.txt");
 
 fn main() {
     print_answer("one (example)", &one(EXAMPLE), "136");
-    print_answer("one", &one(INPUT), "");
-    // print_answer("two (example)", &two(EXAMPLE), "");
-    // print_answer("two", &two(INPUT), "");
+    print_answer("one", &one(INPUT), "108792");
+    print_answer("two (example)", &two(EXAMPLE), "64");
+    print_answer("two", &two(INPUT), "99118");
 }
 
 fn print_answer(name: &str, actual: &str, expected: &str) {
@@ -19,24 +21,22 @@ fn print_answer(name: &str, actual: &str, expected: &str) {
 }
 
 fn one(input: &str) -> String {
-    let platform = Platform::parse(input);
-
-    println!("{platform}");
-
-    let platform = platform.tilt_north();
-
-    println!("{platform}");
-
-    platform.load().to_string()
+    Platform::parse(input)
+        .tilt(vec![North], 1)
+        .load()
+        .to_string()
 }
 
 fn two(input: &str) -> String {
-    String::new()
+    Platform::parse(input)
+        .cycle(1_000_000_000)
+        .load()
+        .to_string()
 }
 
 #[derive(Debug, Clone, Eq, PartialEq)]
 struct Platform {
-    size: Size,
+    size: usize,
     rocks: HashMap<Coordinate, Rock>,
 }
 
@@ -45,10 +45,7 @@ impl Platform {
         let lines: Vec<&str> = input.lines().collect();
 
         Self {
-            size: Size {
-                width: lines.first().expect("at least one").len(),
-                height: lines.len(),
-            },
+            size: lines.len(),
             rocks: lines
                 .iter()
                 .enumerate()
@@ -67,40 +64,106 @@ impl Platform {
         }
     }
 
-    fn tilt_north(&self) -> Self {
+    fn cycle(&self, times: u32) -> Self {
+        self.tilt(vec![North, West, South, East], times)
+    }
+
+    fn tilt(&self, directions: Vec<Direction>, times: u32) -> Self {
         let mut tilted = self.rocks.clone();
 
-        (1..self.size.height).for_each(|y| {
-            (0..self.size.width).for_each(|x| {
-                let rock = tilted.remove(&Coordinate { x, y });
+        let mut cache: HashMap<BitSet, u32> = HashMap::new();
 
-                if let Some(rock) = rock {
-                    let next_y = match rock {
-                        Rock::Cube => y,
-                        Rock::Round => {
-                            let next_obstacle = (0..y).rev().find(|next_y| {
-                                let candidate = Coordinate { x, y: *next_y };
+        let mut time = 0;
 
-                                let result = &tilted.contains_key(&candidate.clone());
-
-                                *result
-                            });
-
-                            match next_obstacle {
-                                None => 0,
-                                Some(y) => y + 1,
-                            }
-                        }
-                    };
-
-                    tilted.insert(Coordinate { x, y: next_y }, rock.clone());
+        while time < times {
+            match cache.insert(self.state(&tilted), time) {
+                None => {}
+                Some(old_time) => {
+                    let times_to_go = times - time;
+                    let repeat_every = time - old_time;
+                    let skip = (times_to_go / repeat_every) * repeat_every;
+                    time += skip;
                 }
-            })
-        });
+            }
+
+            directions.iter().for_each(|direction| {
+                (1..self.size).for_each(|lines_index| {
+                    (0..self.size).for_each(|column_index| {
+                        let rock = tilted.remove(&self.coordinate_for_line_column(
+                            direction,
+                            lines_index,
+                            column_index,
+                        ));
+
+                        if let Some(rock) = rock {
+                            let next_line_index = match rock {
+                                Rock::Cube => lines_index,
+                                Rock::Round => {
+                                    let next_obstacle =
+                                        (0..lines_index).rev().find(|candidate_line_index| {
+                                            let candidate = self.coordinate_for_line_column(
+                                                direction,
+                                                *candidate_line_index,
+                                                column_index,
+                                            );
+
+                                            let result = &tilted.contains_key(&candidate.clone());
+
+                                            *result
+                                        });
+
+                                    match next_obstacle {
+                                        None => 0,
+                                        Some(line_index) => line_index + 1,
+                                    }
+                                }
+                            };
+
+                            tilted.insert(
+                                self.coordinate_for_line_column(
+                                    &direction,
+                                    next_line_index,
+                                    column_index,
+                                ),
+                                rock.clone(),
+                            );
+                        }
+                    })
+                });
+            });
+
+            time += 1;
+        }
 
         Self {
-            size: self.size.clone(),
+            size: self.size,
             rocks: tilted,
+        }
+    }
+
+    fn coordinate_for_line_column(
+        &self,
+        direction: &Direction,
+        line_index: usize,
+        column_index: usize,
+    ) -> Coordinate {
+        match direction {
+            North => Coordinate {
+                x: column_index,
+                y: line_index,
+            },
+            East => Coordinate {
+                x: self.size - line_index - 1,
+                y: column_index,
+            },
+            South => Coordinate {
+                x: self.size - column_index - 1,
+                y: self.size - line_index - 1,
+            },
+            West => Coordinate {
+                x: line_index,
+                y: self.size - column_index - 1,
+            },
         }
     }
 
@@ -108,62 +171,43 @@ impl Platform {
         self.rocks
             .iter()
             .map(|(coordinate, rock)| match rock {
-                Rock::Round => (self.size.height - coordinate.y) as u32,
+                Rock::Round => (self.size - coordinate.y) as u32,
                 Rock::Cube => 0u32,
             })
             .sum()
     }
-}
 
-impl Display for Platform {
-    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
-        (0..self.size.height).for_each(|y| {
-            (0..self.size.width).for_each(|x| match self.rocks.get(&Coordinate { x, y }) {
-                None => f.write_char('.').unwrap(),
-                Some(r) => r.fmt(f).unwrap(),
+    fn state(&self, map: &HashMap<Coordinate, Rock>) -> BitSet {
+        let mut result = BitSet::with_capacity(self.size * self.size);
+
+        (0..self.size).for_each(|y| {
+            (0..self.size).for_each(|x| match map.get(&Coordinate { x, y }) {
+                None => {}
+                Some(_) => {
+                    result.insert(y * self.size + x);
+                }
             });
-            f.write_char('\n').unwrap()
         });
 
-        Ok(())
+        result
     }
 }
 
-#[derive(Debug, Clone, Eq, PartialEq, Hash)]
-struct Size {
-    width: usize,
-    height: usize,
+enum Direction {
+    North,
+    East,
+    South,
+    West,
 }
 
-impl Display for Size {
-    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
-        f.write_fmt(format_args!("{},{}", self.width, self.height))
-    }
-}
-
-#[derive(Debug, Clone, Eq, PartialEq, Hash)]
+#[derive(Debug, Clone, Eq, PartialEq, Hash, Ord, PartialOrd)]
 struct Coordinate {
     x: usize,
     y: usize,
-}
-
-impl Display for Coordinate {
-    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
-        f.write_fmt(format_args!("{},{}", self.x, self.y))
-    }
 }
 
 #[derive(Debug, Clone, Eq, PartialEq, Hash)]
 enum Rock {
     Cube,
     Round,
-}
-
-impl Display for Rock {
-    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
-        f.write_char(match self {
-            Rock::Cube => '#',
-            Rock::Round => 'O',
-        })
-    }
 }
