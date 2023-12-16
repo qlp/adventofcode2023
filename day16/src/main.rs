@@ -1,11 +1,12 @@
-use enum_iterator::{next_cycle, previous_cycle, Sequence};
 use std::collections::{HashMap, HashSet};
-use std::fmt::{Debug, Display, Formatter, Pointer, Write};
-use Direction::{Left, Up};
+use std::fmt::Debug;
 
-use crate::Direction::{Down, Right};
+use enum_iterator::{next_cycle, previous_cycle, Sequence};
+
+use Direction::{Left, Up};
 use Rotation::{Back, Forward};
 
+use crate::Direction::{Down, Right};
 use crate::Orientation::{Horizontal, Vertical};
 
 const INPUT: &str = include_str!("input.txt");
@@ -15,7 +16,7 @@ fn main() {
     print_answer("one (example)", &one(EXAMPLE), "46");
     print_answer("one", &one(INPUT), "6816");
     print_answer("two (example)", &two(EXAMPLE), "51");
-    print_answer("two", &two(INPUT), "");
+    print_answer("two", &two(INPUT), "8163");
 }
 
 fn print_answer(name: &str, actual: &str, expected: &str) {
@@ -164,26 +165,7 @@ impl Contraption {
             processed_beams.extend(&active_beams);
         }
 
-        // processed_beams.iter().for_each(|beam| {
-        //     println!("{:?}", beam);
-        // });
-        //
-        // (0..self.size).for_each(|y| {
-        //     (0..self.size).for_each(|x| {
-        //         match visited.contains(&Point { x, y }) {
-        //             true => {
-        //                 print!("#")
-        //             }
-        //             false => {
-        //                 print!(".")
-        //             }
-        //         };
-        //     });
-        //     println!();
-        // });
-        //
-        let visite = visited.len();
-        visite
+        visited.len()
     }
 
     fn beams_for_object(direction: &Direction, current: &Point, object: &Object) -> Vec<Beam> {
@@ -234,44 +216,6 @@ impl Contraption {
                 }),
             },
         }
-    }
-
-    // fn active_beams_from(&self, beam: Beam) -> Vec<Beam> {
-    //     match self.objects.get(&beam.point) {
-    //         None => Beam {
-    //             point: beam.point,
-    //             direction: beam.direction,
-    //         },
-    //         Some(object) => Beam {
-    //             point: Point { x: 0, y: 0 },
-    //             direction: Down,
-    //         },
-    //     };
-    // }
-}
-
-impl Display for Contraption {
-    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
-        (0..self.size).for_each(|y| {
-            (0..self.size).for_each(|x| {
-                match self.objects.get(&Point { x, y }) {
-                    None => f.write_char('.').unwrap(),
-                    Some(object) => match &object.item {
-                        Item::Mirror(m) => match m {
-                            Back => f.write_char('\\').unwrap(),
-                            Forward => f.write_char('/').unwrap(),
-                        },
-                        Item::Splitter(s) => match s {
-                            Horizontal => f.write_char('-').unwrap(),
-                            Vertical => f.write_char('|').unwrap(),
-                        },
-                    },
-                };
-            });
-            f.write_char('\n').unwrap()
-        });
-
-        Ok(())
     }
 }
 
