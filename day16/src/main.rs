@@ -13,9 +13,9 @@ const EXAMPLE: &str = include_str!("example.txt");
 
 fn main() {
     print_answer("one (example)", &one(EXAMPLE), "46");
-    print_answer("one", &one(INPUT), "");
-    // print_answer("two (example)", &two(EXAMPLE), "");
-    // print_answer("two", &two(INPUT), "");
+    print_answer("one", &one(INPUT), "6816");
+    print_answer("two (example)", &two(EXAMPLE), "51");
+    print_answer("two", &two(INPUT), "");
 }
 
 fn print_answer(name: &str, actual: &str, expected: &str) {
@@ -26,69 +26,49 @@ fn print_answer(name: &str, actual: &str, expected: &str) {
 }
 
 fn one(input: &str) -> String {
-    let contraption = Contraption::parse(input);
-
-    let start = match contraption.objects.get(&Point { x: 0, y: 0 }) {
-        None => Beam {
+    Contraption::parse(input)
+        .energy(&Beam {
             point: Point { x: 0, y: 0 },
             direction: Right,
-        },
-        Some(_) => Beam {
-            point: Point { x: 0, y: 0 },
-            direction: Down,
-        },
-    };
-
-    println!("{contraption}");
-
-    let mut processed_beams = HashSet::new();
-    processed_beams.insert(start);
-
-    let mut active_beams = HashSet::new();
-    active_beams.insert(start);
-
-    let mut visited: HashSet<Point> = HashSet::new();
-
-    while !active_beams.is_empty() {
-        let traces = &active_beams
-            .iter()
-            .map(|beam| contraption.trace(&beam))
-            .collect::<Vec<(Vec<Beam>, Vec<Point>)>>();
-
-        let mut new_beams: HashSet<Beam> = HashSet::new();
-        traces.iter().for_each(|(beams, points)| {
-            visited.extend(points);
-            new_beams.extend(beams);
-        });
-
-        active_beams = new_beams.difference(&processed_beams).copied().collect();
-
-        processed_beams.extend(&active_beams);
-    }
-
-    processed_beams.iter().for_each(|beam| {
-        println!("{:?}", beam);
-    });
-
-    (0..contraption.size).for_each(|y| {
-        (0..contraption.size).for_each(|x| {
-            match visited.contains(&Point { x, y }) {
-                true => {
-                    print!("#")
-                }
-                false => {
-                    print!(".")
-                }
-            };
-        });
-        println!();
-    });
-
-    visited.len().to_string()
+        })
+        .to_string()
 }
 
 fn two(input: &str) -> String {
-    String::new()
+    let contraption = Contraption::parse(input);
+
+    let max = (0..contraption.size)
+        .flat_map(|position| {
+            vec![
+                Beam {
+                    point: Point { x: position, y: 0 },
+                    direction: Down,
+                },
+                Beam {
+                    point: Point {
+                        x: position,
+                        y: contraption.size - 1,
+                    },
+                    direction: Up,
+                },
+                Beam {
+                    point: Point {
+                        x: contraption.size - 1,
+                        y: position,
+                    },
+                    direction: Left,
+                },
+                Beam {
+                    point: Point { x: 0, y: position },
+                    direction: Right,
+                },
+            ]
+        })
+        .map(|beam| contraption.energy(&beam))
+        .max()
+        .expect("energy");
+
+    max.to_string()
 }
 
 struct Contraption {
@@ -145,20 +125,7 @@ impl Contraption {
                     }
                     Some(object) => {
                         return (
-                            match &object.item {
-                                Item::Mirror(rotation) => vec![Beam {
-                                    point: *current,
-                                    direction: beam.direction.rotate(rotation),
-                                }],
-                                Item::Splitter(orientation) => orientation
-                                    .split(&beam.direction)
-                                    .iter()
-                                    .map(|next_direction| Beam {
-                                        point: *current,
-                                        direction: *next_direction,
-                                    })
-                                    .collect(),
-                            },
+                            Self::beams_for_object(&beam.direction, current, &object),
                             visited,
                         )
                     }
@@ -166,6 +133,73 @@ impl Contraption {
             } else {
                 return (vec![], visited);
             }
+        }
+    }
+
+    fn energy(&self, start: &Beam) -> usize {
+        let mut active_beams: Vec<Beam> = match self.objects.get(&start.point) {
+            None => vec![start.clone()],
+            Some(object) => Self::beams_for_object(&start.direction, &start.point, object),
+        };
+
+        let mut processed_beams = HashSet::new();
+        processed_beams.extend(&active_beams);
+
+        let mut visited: HashSet<Point> = HashSet::new();
+
+        while !active_beams.is_empty() {
+            let traces = &active_beams
+                .iter()
+                .map(|beam| self.trace(&beam))
+                .collect::<Vec<(Vec<Beam>, Vec<Point>)>>();
+
+            let mut new_beams: HashSet<Beam> = HashSet::new();
+            traces.iter().for_each(|(beams, points)| {
+                visited.extend(points);
+                new_beams.extend(beams);
+            });
+
+            active_beams = new_beams.difference(&processed_beams).copied().collect();
+
+            processed_beams.extend(&active_beams);
+        }
+
+        // processed_beams.iter().for_each(|beam| {
+        //     println!("{:?}", beam);
+        // });
+        //
+        // (0..self.size).for_each(|y| {
+        //     (0..self.size).for_each(|x| {
+        //         match visited.contains(&Point { x, y }) {
+        //             true => {
+        //                 print!("#")
+        //             }
+        //             false => {
+        //                 print!(".")
+        //             }
+        //         };
+        //     });
+        //     println!();
+        // });
+        //
+        let visite = visited.len();
+        visite
+    }
+
+    fn beams_for_object(direction: &Direction, current: &Point, object: &Object) -> Vec<Beam> {
+        match &object.item {
+            Item::Mirror(rotation) => vec![Beam {
+                point: *current,
+                direction: direction.rotate(rotation),
+            }],
+            Item::Splitter(orientation) => orientation
+                .split(&direction)
+                .iter()
+                .map(|next_direction| Beam {
+                    point: *current,
+                    direction: *next_direction,
+                })
+                .collect(),
         }
     }
 
@@ -201,6 +235,19 @@ impl Contraption {
             },
         }
     }
+
+    // fn active_beams_from(&self, beam: Beam) -> Vec<Beam> {
+    //     match self.objects.get(&beam.point) {
+    //         None => Beam {
+    //             point: beam.point,
+    //             direction: beam.direction,
+    //         },
+    //         Some(object) => Beam {
+    //             point: Point { x: 0, y: 0 },
+    //             direction: Down,
+    //         },
+    //     };
+    // }
 }
 
 impl Display for Contraption {
