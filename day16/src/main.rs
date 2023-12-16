@@ -1,4 +1,4 @@
-use std::collections::{HashMap, HashSet};
+use std::collections::HashSet;
 use std::fmt::Debug;
 
 use enum_iterator::{next_cycle, previous_cycle, Sequence};
@@ -29,7 +29,7 @@ fn print_answer(name: &str, actual: &str, expected: &str) {
 fn one(input: &str) -> String {
     Contraption::parse(input)
         .energy(&Beam {
-            point: Point { x: 0, y: 0 },
+            point: 0,
             direction: Right,
         })
         .to_string()
@@ -42,25 +42,19 @@ fn two(input: &str) -> String {
         .flat_map(|position| {
             vec![
                 Beam {
-                    point: Point { x: position, y: 0 },
+                    point: contraption.point_from(position, 0),
                     direction: Down,
                 },
                 Beam {
-                    point: Point {
-                        x: position,
-                        y: contraption.size - 1,
-                    },
+                    point: contraption.point_from(position, contraption.size - 1),
                     direction: Up,
                 },
                 Beam {
-                    point: Point {
-                        x: contraption.size - 1,
-                        y: position,
-                    },
+                    point: contraption.point_from(contraption.size - 1, position),
                     direction: Left,
                 },
                 Beam {
-                    point: Point { x: 0, y: position },
+                    point: contraption.point_from(0, position),
                     direction: Right,
                 },
             ]
@@ -74,59 +68,44 @@ fn two(input: &str) -> String {
 
 struct Contraption {
     size: usize,
-    objects: HashMap<Point, Object>,
+    items: Vec<Option<Item>>,
 }
 
 impl Contraption {
     fn parse(input: &str) -> Self {
         let size = input.lines().next().expect("line").len();
-        let objects: HashMap<Point, Object> = input
+        let items: Vec<Option<Item>> = input
             .lines()
-            .enumerate()
-            .flat_map(|(y, line)| {
-                line.chars()
-                    .enumerate()
-                    .filter_map(|(x, c)| {
-                        match c {
-                            '.' => None,
-                            '|' => Some(Item::Splitter(Vertical)),
-                            '-' => Some(Item::Splitter(Horizontal)),
-                            '\\' => Some(Item::Mirror(Back)),
-                            '/' => Some(Item::Mirror(Forward)),
-                            _ => panic!("unexpected char"),
-                        }
-                        .map(|item| {
-                            (
-                                Point { x, y },
-                                Object {
-                                    point: Point { x, y },
-                                    item,
-                                },
-                            )
-                        })
-                    })
-                    .collect::<Vec<(Point, Object)>>()
+            .flat_map(|line| {
+                line.chars().map(|c| match c {
+                    '.' => None,
+                    '|' => Some(Item::Splitter(Vertical)),
+                    '-' => Some(Item::Splitter(Horizontal)),
+                    '\\' => Some(Item::Mirror(Back)),
+                    '/' => Some(Item::Mirror(Forward)),
+                    _ => panic!("unexpected char"),
+                })
             })
-            .collect();
+            .collect::<Vec<Option<Item>>>();
 
-        Self { size, objects }
+        Self { size, items }
     }
 
-    fn trace(&self, beam: &Beam) -> (Vec<Beam>, Vec<Point>) {
-        let mut point: Option<Point> = self.next(&beam.point, &beam.direction);
-        let mut visited: Vec<Point> = vec![beam.point];
+    fn trace(&self, beam: &Beam) -> (Vec<Beam>, Vec<usize>) {
+        let mut point: Option<usize> = self.next(beam.point, &beam.direction);
+        let mut visited: Vec<usize> = vec![beam.point];
 
         loop {
             if let Some(current) = &point {
                 visited.push(*current);
 
-                match self.objects.get(current) {
+                match &self.items[*current] {
                     None => {
-                        point = self.next(current, &beam.direction);
+                        point = self.next(*current, &beam.direction);
                     }
-                    Some(object) => {
+                    Some(item) => {
                         return (
-                            Self::beams_for_object(&beam.direction, current, &object),
+                            Self::beams_for_object(&beam.direction, *current, item),
                             visited,
                         )
                     }
@@ -138,21 +117,21 @@ impl Contraption {
     }
 
     fn energy(&self, start: &Beam) -> usize {
-        let mut active_beams: Vec<Beam> = match self.objects.get(&start.point) {
-            None => vec![start.clone()],
-            Some(object) => Self::beams_for_object(&start.direction, &start.point, object),
+        let mut active_beams: Vec<Beam> = match &self.items[start.point] {
+            None => vec![*start],
+            Some(object) => Self::beams_for_object(&start.direction, start.point, object),
         };
 
         let mut processed_beams = HashSet::new();
         processed_beams.extend(&active_beams);
 
-        let mut visited: HashSet<Point> = HashSet::new();
+        let mut visited: HashSet<usize> = HashSet::new();
 
         while !active_beams.is_empty() {
             let traces = &active_beams
                 .iter()
                 .map(|beam| self.trace(&beam))
-                .collect::<Vec<(Vec<Beam>, Vec<Point>)>>();
+                .collect::<Vec<(Vec<Beam>, Vec<usize>)>>();
 
             let mut new_beams: HashSet<Beam> = HashSet::new();
             traces.iter().for_each(|(beams, points)| {
@@ -168,61 +147,58 @@ impl Contraption {
         visited.len()
     }
 
-    fn beams_for_object(direction: &Direction, current: &Point, object: &Object) -> Vec<Beam> {
-        match &object.item {
+    fn beams_for_object(direction: &Direction, current: usize, item: &Item) -> Vec<Beam> {
+        match &item {
             Item::Mirror(rotation) => vec![Beam {
-                point: *current,
+                point: current,
                 direction: direction.rotate(rotation),
             }],
             Item::Splitter(orientation) => orientation
                 .split(&direction)
                 .iter()
                 .map(|next_direction| Beam {
-                    point: *current,
+                    point: current,
                     direction: *next_direction,
                 })
                 .collect(),
         }
     }
 
-    fn next(&self, point: &Point, direction: &Direction) -> Option<Point> {
+    fn next(&self, point: usize, direction: &Direction) -> Option<usize> {
+        let point_x = self.x_of(point);
+        let point_y = self.y_of(point);
+
         match direction {
-            Up => match point.y == 0 {
+            Up => match point_y == 0 {
                 true => None,
-                false => Some(Point {
-                    x: point.x,
-                    y: point.y - 1,
-                }),
+                false => Some(self.point_from(point_x, point_y - 1)),
             },
-            Down => match point.y + 1 == self.size {
+            Down => match point_y + 1 == self.size {
                 true => None,
-                false => Some(Point {
-                    x: point.x,
-                    y: point.y + 1,
-                }),
+                false => Some(self.point_from(point_x, point_y + 1)),
             },
-            Left => match point.x == 0 {
+            Left => match point_x == 0 {
                 true => None,
-                false => Some(Point {
-                    x: point.x - 1,
-                    y: point.y,
-                }),
+                false => Some(self.point_from(point_x - 1, point_y)),
             },
-            Right => match point.x + 1 == self.size {
+            Right => match point_x + 1 == self.size {
                 true => None,
-                false => Some(Point {
-                    x: point.x + 1,
-                    y: point.y,
-                }),
+                false => Some(self.point_from(point_x + 1, point_y)),
             },
         }
     }
-}
 
-#[derive(Debug, Clone, Eq, PartialEq, Hash, Ord, PartialOrd)]
-struct Object {
-    point: Point,
-    item: Item,
+    fn x_of(&self, point: usize) -> usize {
+        point % self.size
+    }
+
+    fn y_of(&self, point: usize) -> usize {
+        point / self.size
+    }
+
+    fn point_from(&self, x: usize, y: usize) -> usize {
+        y * self.size + x
+    }
 }
 
 #[derive(Debug, Clone, Eq, PartialEq, Hash, Ord, PartialOrd)]
@@ -259,14 +235,8 @@ impl Orientation {
 }
 
 #[derive(Debug, Clone, Copy, Eq, PartialEq, Hash, Ord, PartialOrd)]
-struct Point {
-    x: usize,
-    y: usize,
-}
-
-#[derive(Debug, Clone, Copy, Eq, PartialEq, Hash, Ord, PartialOrd)]
 struct Beam {
-    point: Point,
+    point: usize,
     direction: Direction,
 }
 
