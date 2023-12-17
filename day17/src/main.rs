@@ -1,7 +1,7 @@
 use crate::Orientation::{Down, Right};
 use crate::Part::{One, Two};
 use std::collections::{HashMap, HashSet};
-use std::fmt::{Debug, Display, Formatter, Write};
+use std::fmt::Debug;
 use Orientation::{Left, Up};
 
 const INPUT: &str = include_str!("input.txt");
@@ -13,7 +13,7 @@ fn main() {
     print_answer("one", &one(INPUT), "724");
     print_answer("two (example 1)", &two(EXAMPLE_1), "94");
     print_answer("two (example 2)", &two(EXAMPLE_2), "71");
-    print_answer("two", &two(INPUT), "");
+    print_answer("two", &two(INPUT), "877");
 }
 
 fn print_answer(name: &str, actual: &str, expected: &str) {
@@ -124,56 +124,6 @@ impl HeatMap {
         }
     }
 
-    fn print_driver(&self, driver: &CrucibleDriver) {
-        (0..self.size.height).for_each(|y| {
-            (0..self.size.width).for_each(|x| {
-                let position = Position { x, y };
-                match driver
-                    .path
-                    .positions
-                    .iter()
-                    .find(|(past_position, _)| position.eq(past_position))
-                {
-                    None => {
-                        print!("{}", self.get_by_coordinates(x, y));
-                    }
-                    Some((_, orientation)) => match orientation {
-                        Up => print!("^"),
-                        Down => print!("v"),
-                        Left => print!("<"),
-                        Right => print!(">"),
-                    },
-                }
-            });
-            println!();
-        });
-        println!();
-
-        let mut temperature = 0;
-
-        driver
-            .path
-            .positions
-            .iter()
-            .for_each(|(position, orientation)| {
-                temperature += self.get_by_position(position);
-                print!(
-                    "{}, {} {} {}° => ",
-                    position.x,
-                    position.y,
-                    match orientation {
-                        Up => "^",
-                        Down => "v",
-                        Left => "<",
-                        Right => ">",
-                    },
-                    temperature,
-                )
-            });
-        print!(" (driver temperature: {}°)", driver.temperature);
-        println!();
-    }
-
     fn next_position(&self, position: &Position, orientation: &Orientation) -> Option<Position> {
         let left_border = position.x == 0;
         let top_border = position.y == 0;
@@ -219,7 +169,7 @@ impl HeatMap {
                 orientation: Right,
                 straight_count: 0,
             },
-            path: Path::start(&Right),
+            path: Path::new(),
             temperature: 0,
         };
 
@@ -229,7 +179,7 @@ impl HeatMap {
                 orientation: Down,
                 straight_count: 0,
             },
-            path: Path::start(&Down),
+            path: Path::new(),
             temperature: 0,
         };
 
@@ -243,12 +193,6 @@ impl HeatMap {
         next_crucible_drivers.extend(down_drivers.clone());
 
         while !next_crucible_drivers.is_empty() {
-            // next_crucible_drivers.iter().for_each(|driver| {
-            //     self.print_driver(driver);
-            //     println!("-----------------");
-            // });
-            // println!("=====================");
-
             let mut best_drivers: HashSet<CrucibleDriver> = HashSet::new();
 
             let next_drivers: Vec<CrucibleDriver> = next_crucible_drivers
@@ -276,29 +220,21 @@ impl HeatMap {
 
         let crucibles_at_end_position: HashMap<&Crucible, &u32> = history
             .iter()
-            .filter(|(crucible, temperature)| {
-                crucible.position.eq(&Position {
+            .filter(|(crucible, _)| match self.part {
+                One => crucible.position.eq(&Position {
                     x: self.size.width - 1,
                     y: self.size.height - 1,
-                }) && crucible.straight_count > 3
+                }),
+                Two => {
+                    crucible.position.eq(&Position {
+                        x: self.size.width - 1,
+                        y: self.size.height - 1,
+                    }) && crucible.straight_count > 3
+                }
             })
             .collect();
 
         **crucibles_at_end_position.values().min().expect("answer")
-    }
-}
-
-impl Display for HeatMap {
-    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
-        (0..self.size.height).for_each(|y| {
-            (0..self.size.width).for_each(|x| {
-                f.write_fmt(format_args!("{}", self.get_by_coordinates(x, y)))
-                    .unwrap();
-            });
-            f.write_char('\n').unwrap();
-        });
-
-        Ok(())
     }
 }
 
@@ -363,11 +299,8 @@ impl Path {
         Self { positions: result }
     }
 
-    fn start(orientation: &Orientation) -> Self {
-        Self {
-            // positions: vec![(Position { x: 0, y: 0 }, orientation.clone())],
-            positions: vec![],
-        }
+    fn new() -> Self {
+        Self { positions: vec![] }
     }
 }
 
