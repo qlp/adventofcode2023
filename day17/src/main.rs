@@ -1,16 +1,19 @@
 use crate::Orientation::{Down, Right};
+use crate::Part::{One, Two};
 use std::collections::{HashMap, HashSet};
 use std::fmt::{Debug, Display, Formatter, Write};
 use Orientation::{Left, Up};
 
 const INPUT: &str = include_str!("input.txt");
-const EXAMPLE: &str = include_str!("example.txt");
+const EXAMPLE_1: &str = include_str!("example-1.txt");
+const EXAMPLE_2: &str = include_str!("example-2.txt");
 
 fn main() {
-    print_answer("one (example)", &one(EXAMPLE), "102");
-    print_answer("one", &one(INPUT), "");
-    // print_answer("two (example)", &two(EXAMPLE), "");
-    // print_answer("two", &two(INPUT), "");
+    print_answer("one (example)", &one(EXAMPLE_1), "102");
+    print_answer("one", &one(INPUT), "724");
+    print_answer("two (example 1)", &two(EXAMPLE_1), "94");
+    print_answer("two (example 2)", &two(EXAMPLE_2), "71");
+    print_answer("two", &two(INPUT), "");
 }
 
 fn print_answer(name: &str, actual: &str, expected: &str) {
@@ -21,109 +24,46 @@ fn print_answer(name: &str, actual: &str, expected: &str) {
 }
 
 fn one(input: &str) -> String {
-    let heat_map = HeatMap::parse(input);
-
-    let mut history: HashMap<Crucible, u32> = HashMap::new();
-
-    let right = CrucibleDriver {
-        crucible: Crucible {
-            position: Position { x: 0, y: 0 },
-            orientation: Right,
-            straight_count: 0,
-        },
-        path: Path::start(&Right),
-        temperature: 0,
-    };
-
-    let down = CrucibleDriver {
-        crucible: Crucible {
-            position: Position { x: 0, y: 0 },
-            orientation: Down,
-            straight_count: 0,
-        },
-        path: Path::start(&Down),
-        temperature: 0,
-    };
-
-    history.insert(right.crucible.clone(), 0);
-    history.insert(down.crucible.clone(), 0);
-
-    let mut next_crucible_drivers: Vec<CrucibleDriver> = Vec::new();
-    let left_drivers = heat_map.next_crucible_drivers(&right);
-    next_crucible_drivers.extend(left_drivers.clone());
-    let down_drivers = heat_map.next_crucible_drivers(&down);
-    next_crucible_drivers.extend(down_drivers.clone());
-
-    while !next_crucible_drivers.is_empty() {
-        // next_crucible_drivers.iter().for_each(|driver| {
-        //     heat_map.print_driver(driver);
-        //     println!("-----------------");
-        // });
-        // println!("=====================");
-
-        let mut best_drivers: HashSet<CrucibleDriver> = HashSet::new();
-
-        let next_drivers: Vec<CrucibleDriver> = next_crucible_drivers
-            .iter()
-            .flat_map(|crucible| heat_map.next_crucible_drivers(crucible))
-            .collect();
-
-        next_drivers
-            .iter()
-            .for_each(|driver| match history.get(&driver.crucible) {
-                None => {
-                    best_drivers.insert(driver.clone());
-                    history.insert(driver.crucible.clone(), driver.temperature);
-                }
-                Some(opponent_temperature) => {
-                    if *opponent_temperature > driver.temperature {
-                        best_drivers.insert(driver.clone());
-                        history.insert(driver.crucible.clone(), driver.temperature);
-                    }
-                }
-            });
-
-        next_crucible_drivers = Vec::from_iter(best_drivers);
-    }
-
-    history
-        .iter()
-        .filter_map(|(crucible, temperature)| {
-            match crucible.position.eq(&Position {
-                x: heat_map.size - 1,
-                y: heat_map.size - 1,
-            }) {
-                true => Some(temperature),
-                false => None,
-            }
-        })
-        .min()
-        .expect("one")
-        .to_string()
+    HeatMap::parse(input, One).minimum_temperature().to_string()
 }
 
 fn two(input: &str) -> String {
-    String::new()
+    HeatMap::parse(input, Two).minimum_temperature().to_string()
 }
 
 struct HeatMap {
-    size: usize,
+    size: Size,
     values: Vec<u32>,
+    part: Part,
+}
+
+enum Part {
+    One,
+    Two,
+}
+
+struct Size {
+    width: usize,
+    height: usize,
 }
 
 impl HeatMap {
-    fn parse(input: &str) -> Self {
+    fn parse(input: &str, part: Part) -> Self {
         Self {
-            size: input.lines().next().expect("line").len(),
+            size: Size {
+                width: input.lines().next().expect("line").len(),
+                height: input.lines().collect::<Vec<&str>>().len(),
+            },
             values: input
                 .lines()
                 .flat_map(|line| line.chars().map(|c| c.to_digit(10).expect("digit")))
                 .collect(),
+            part: part,
         }
     }
 
     fn get_by_coordinates(&self, x: usize, y: usize) -> u32 {
-        self.values[y * self.size + x]
+        self.values[y * self.size.width + x]
     }
 
     fn get_by_position(&self, position: &Position) -> u32 {
@@ -147,27 +87,46 @@ impl HeatMap {
 
     fn next_crucible(&self, crucible: &Crucible, turn: &Turn) -> Option<Crucible> {
         let orientation = crucible.orientation.turn(turn);
-        match self.next_position(&crucible.position, orientation) {
-            None => None,
-            Some(position) => match (turn, crucible.straight_count) {
-                (Turn::Straight, 2) => None,
-                (Turn::Straight, _) => Some(Crucible {
-                    position: position,
-                    orientation: orientation.clone(),
-                    straight_count: crucible.straight_count + 1,
-                }),
-                (_, _) => Some(Crucible {
-                    position: position,
-                    orientation: orientation.clone(),
-                    straight_count: 0,
-                }),
+        match self.part {
+            One => match self.next_position(&crucible.position, orientation) {
+                None => None,
+                Some(position) => match (turn, crucible.straight_count) {
+                    (Turn::Straight, 2) => None,
+                    (Turn::Straight, _) => Some(Crucible {
+                        position: position,
+                        orientation: orientation.clone(),
+                        straight_count: crucible.straight_count + 1,
+                    }),
+                    (_, _) => Some(Crucible {
+                        position: position,
+                        orientation: orientation.clone(),
+                        straight_count: 0,
+                    }),
+                },
+            },
+            Two => match self.next_position(&crucible.position, orientation) {
+                None => None,
+                Some(position) => match (turn, crucible.straight_count) {
+                    (Turn::Straight, 10) => None,
+                    (Turn::Straight, _) => Some(Crucible {
+                        position: position,
+                        orientation: orientation.clone(),
+                        straight_count: crucible.straight_count + 1,
+                    }),
+                    (_, 4..) => Some(Crucible {
+                        position: position,
+                        orientation: orientation.clone(),
+                        straight_count: 1,
+                    }),
+                    _ => None,
+                },
             },
         }
     }
 
     fn print_driver(&self, driver: &CrucibleDriver) {
-        (0..self.size).for_each(|y| {
-            (0..self.size).for_each(|x| {
+        (0..self.size.height).for_each(|y| {
+            (0..self.size.width).for_each(|x| {
                 let position = Position { x, y };
                 match driver
                     .path
@@ -218,8 +177,8 @@ impl HeatMap {
     fn next_position(&self, position: &Position, orientation: &Orientation) -> Option<Position> {
         let left_border = position.x == 0;
         let top_border = position.y == 0;
-        let right_border = position.x + 1 == self.size;
-        let bottom_border = position.y + 1 == self.size;
+        let right_border = position.x + 1 == self.size.width;
+        let bottom_border = position.y + 1 == self.size.height;
 
         match (
             orientation,
@@ -250,12 +209,89 @@ impl HeatMap {
             }),
         }
     }
+
+    fn minimum_temperature(&self) -> u32 {
+        let mut history: HashMap<Crucible, u32> = HashMap::new();
+
+        let right = CrucibleDriver {
+            crucible: Crucible {
+                position: Position { x: 0, y: 0 },
+                orientation: Right,
+                straight_count: 0,
+            },
+            path: Path::start(&Right),
+            temperature: 0,
+        };
+
+        let down = CrucibleDriver {
+            crucible: Crucible {
+                position: Position { x: 0, y: 0 },
+                orientation: Down,
+                straight_count: 0,
+            },
+            path: Path::start(&Down),
+            temperature: 0,
+        };
+
+        history.insert(right.crucible.clone(), 0);
+        history.insert(down.crucible.clone(), 0);
+
+        let mut next_crucible_drivers: Vec<CrucibleDriver> = Vec::new();
+        let left_drivers = self.next_crucible_drivers(&right);
+        next_crucible_drivers.extend(left_drivers.clone());
+        let down_drivers = self.next_crucible_drivers(&down);
+        next_crucible_drivers.extend(down_drivers.clone());
+
+        while !next_crucible_drivers.is_empty() {
+            // next_crucible_drivers.iter().for_each(|driver| {
+            //     self.print_driver(driver);
+            //     println!("-----------------");
+            // });
+            // println!("=====================");
+
+            let mut best_drivers: HashSet<CrucibleDriver> = HashSet::new();
+
+            let next_drivers: Vec<CrucibleDriver> = next_crucible_drivers
+                .iter()
+                .flat_map(|crucible| self.next_crucible_drivers(crucible))
+                .collect();
+
+            next_drivers
+                .iter()
+                .for_each(|driver| match history.get(&driver.crucible) {
+                    None => {
+                        best_drivers.insert(driver.clone());
+                        history.insert(driver.crucible.clone(), driver.temperature);
+                    }
+                    Some(opponent_temperature) => {
+                        if *opponent_temperature > driver.temperature {
+                            best_drivers.insert(driver.clone());
+                            history.insert(driver.crucible.clone(), driver.temperature);
+                        }
+                    }
+                });
+
+            next_crucible_drivers = Vec::from_iter(best_drivers);
+        }
+
+        let crucibles_at_end_position: HashMap<&Crucible, &u32> = history
+            .iter()
+            .filter(|(crucible, temperature)| {
+                crucible.position.eq(&Position {
+                    x: self.size.width - 1,
+                    y: self.size.height - 1,
+                }) && crucible.straight_count > 3
+            })
+            .collect();
+
+        **crucibles_at_end_position.values().min().expect("answer")
+    }
 }
 
 impl Display for HeatMap {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
-        (0..self.size).for_each(|y| {
-            (0..self.size).for_each(|x| {
+        (0..self.size.height).for_each(|y| {
+            (0..self.size.width).for_each(|x| {
                 f.write_fmt(format_args!("{}", self.get_by_coordinates(x, y)))
                     .unwrap();
             });
