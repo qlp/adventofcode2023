@@ -76,9 +76,6 @@ impl HeatMap {
             .filter_map(|turn| self.next_crucible(&crucible_driver.crucible, turn))
             .map(|next_crucible| CrucibleDriver {
                 crucible: next_crucible.clone(),
-                path: crucible_driver
-                    .path
-                    .with(&next_crucible.position, &next_crucible.orientation),
                 temperature: crucible_driver.temperature
                     + self.get_by_position(&next_crucible.position),
             })
@@ -161,7 +158,8 @@ impl HeatMap {
     }
 
     fn minimum_temperature(&self) -> u32 {
-        let mut history: HashMap<Crucible, u32> = HashMap::new();
+        let mut history: HashMap<Crucible, u32> =
+            HashMap::with_capacity(self.size.width * self.size.height * 10);
 
         let right = CrucibleDriver {
             crucible: Crucible {
@@ -169,7 +167,6 @@ impl HeatMap {
                 orientation: Right,
                 straight_count: 0,
             },
-            path: Path::new(),
             temperature: 0,
         };
 
@@ -179,7 +176,6 @@ impl HeatMap {
                 orientation: Down,
                 straight_count: 0,
             },
-            path: Path::new(),
             temperature: 0,
         };
 
@@ -218,23 +214,22 @@ impl HeatMap {
             next_crucible_drivers = Vec::from_iter(best_drivers);
         }
 
-        let crucibles_at_end_position: HashMap<&Crucible, &u32> = history
+        *history
             .iter()
-            .filter(|(crucible, _)| match self.part {
-                One => crucible.position.eq(&Position {
-                    x: self.size.width - 1,
-                    y: self.size.height - 1,
-                }),
-                Two => {
-                    crucible.position.eq(&Position {
-                        x: self.size.width - 1,
-                        y: self.size.height - 1,
-                    }) && crucible.straight_count > 3
+            .filter(|(crucible, _)| {
+                match (crucible.position.x == self.size.width - 1)
+                    && (crucible.position.y == self.size.height - 1)
+                {
+                    true => match self.part {
+                        One => true,
+                        Two => crucible.straight_count > 3,
+                    },
+                    false => false,
                 }
             })
-            .collect();
-
-        **crucibles_at_end_position.values().min().expect("answer")
+            .map(|(_, value)| value)
+            .min()
+            .expect("solution")
     }
 }
 
@@ -248,7 +243,6 @@ struct Crucible {
 #[derive(Debug, Clone, Eq, PartialEq, Hash, Ord, PartialOrd)]
 struct CrucibleDriver {
     crucible: Crucible,
-    path: Path,
     temperature: u32,
 }
 
@@ -283,24 +277,6 @@ impl Orientation {
                 Right => &Down,
             },
         }
-    }
-}
-
-#[derive(Debug, Clone, Eq, PartialEq, Hash, Ord, PartialOrd)]
-struct Path {
-    positions: Vec<(Position, Orientation)>,
-}
-
-impl Path {
-    fn with(&self, position: &Position, orientation: &Orientation) -> Self {
-        let mut result = self.positions.clone();
-        result.push((position.clone(), orientation.clone()));
-
-        Self { positions: result }
-    }
-
-    fn new() -> Self {
-        Self { positions: vec![] }
     }
 }
 
