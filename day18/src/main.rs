@@ -1,18 +1,17 @@
+use std::i64;
+use std::ops::RangeInclusive;
+
 use crate::Direction::{Down, Left, Right, Up};
-use bit_set::BitSet;
-use hex;
-use std::collections::HashSet;
-use std::fmt::{Debug, Display, Formatter, Write};
-use std::i32;
+use crate::Part::{One, Two};
 
 const INPUT: &str = include_str!("input.txt");
 const EXAMPLE: &str = include_str!("example.txt");
 
 fn main() {
     print_answer("one (example)", &one(EXAMPLE), "62");
-    print_answer("one", &one(INPUT), "37044 is too low");
-    // print_answer("two (example)", &two(EXAMPLE), "");
-    // print_answer("two", &two(INPUT), "");
+    print_answer("one", &one(INPUT), "45159");
+    print_answer("two (example)", &two(EXAMPLE), "952408144115");
+    print_answer("two", &two(INPUT), "134549294799713");
 }
 
 fn print_answer(name: &str, actual: &str, expected: &str) {
@@ -22,160 +21,206 @@ fn print_answer(name: &str, actual: &str, expected: &str) {
     }
 }
 
+enum Part {
+    One,
+    Two,
+}
+
 fn one(input: &str) -> String {
-    let plan = DigPlan::parse(input);
-
-    println!("{}", plan);
-
-    plan.as_bit_set().len().to_string()
+    DigPlan::parse(input, &One).filled().to_string()
 }
 
 fn two(input: &str) -> String {
-    String::new()
+    DigPlan::parse(input, &Two).filled().to_string()
 }
 
 struct DigPlan {
-    steps: Vec<Step>,
+    points: Vec<Point>,
 }
 
 impl DigPlan {
-    fn parse(input: &str) -> Self {
-        Self {
-            steps: input.lines().map(Step::parse).collect(),
-        }
+    fn parse(input: &str, part: &Part) -> Self {
+        let mut points = vec![Point::origin()];
+
+        input
+            .lines()
+            .map(|line| Step::parse(line, part))
+            .for_each(|step| {
+                points.push(points.last().expect("point").dig(&step));
+            });
+
+        Self { points }
     }
 
-    fn points(&self) -> Vec<Point> {
-        let mut result = vec![Point { x: 0, y: 0 }];
+    fn filled(&self) -> u64 {
+        let mut ys: Vec<i64> = self.points.iter().map(|p| p.y).collect();
+        ys.sort();
+        ys.dedup();
 
-        self.steps.iter().for_each(|step| {
-            result.push(result.last().expect("point").dig(step));
+        let mut ranges = self.ranges_on_y(ys[0]);
+        let mut result = ranges
+            .iter()
+            .map(|r| (r.end() - r.start() + 1) as u64)
+            .sum();
+
+        ys.windows(2).for_each(|window| {
+            let previous_y = window[0];
+            let current_y = window[1];
+
+            let xs_on_previous_y: Vec<i64> = ranges
+                .iter()
+                .flat_map(|range| vec![*range.start(), *range.end()])
+                .collect();
+            let xs_on_current_y = self.xs_on_y(current_y);
+
+            let mut all_xs: Vec<i64> = Vec::new();
+            all_xs.extend(&xs_on_previous_y);
+            all_xs.extend(&xs_on_current_y);
+            all_xs.sort();
+            all_xs.dedup();
+
+            let split_previous: Vec<RangeInclusive<i64>> = ranges
+                .iter()
+                .flat_map(|range| {
+                    all_xs
+                        .iter()
+                        .filter(|x| range.contains(x))
+                        .collect::<Vec<&i64>>()
+                        .windows(2)
+                        .map(|x| *x[0]..=*x[1])
+                        .collect::<Vec<RangeInclusive<i64>>>()
+                })
+                .collect();
+
+            let split_current: Vec<RangeInclusive<i64>> = self
+                .ranges_on_y(current_y)
+                .iter()
+                .flat_map(|range| {
+                    all_xs
+                        .iter()
+                        .filter(|x| range.contains(x))
+                        .collect::<Vec<&i64>>()
+                        .windows(2)
+                        .map(|x| *x[0]..=*x[1])
+                        .collect::<Vec<RangeInclusive<i64>>>()
+                })
+                .collect();
+
+            let mut new_ranges: Vec<RangeInclusive<i64>> = Vec::new();
+            new_ranges.extend(split_previous.clone());
+            new_ranges.extend(split_current.clone());
+            new_ranges.sort_by_key(|r| r.start().clone());
+            new_ranges.dedup();
+
+            let diff_y = (current_y - previous_y) as u64;
+            let surface_above = (diff_y - 1)
+                * ranges
+                    .iter()
+                    .map(|r| (r.end() - r.start() + 1) as u64)
+                    .sum::<u64>();
+
+            let surface_at_row = Self::merge(&new_ranges)
+                .iter()
+                .map(|r| (r.end() - r.start() + 1) as u64)
+                .sum::<u64>();
+
+            let surface = surface_above + surface_at_row;
+            result += surface;
+
+            let mut split_ranges = new_ranges
+                .iter()
+                .filter(|candidate| {
+                    match (
+                        split_previous.contains(candidate),
+                        split_current.contains(candidate),
+                    ) {
+                        (true, true) => false,
+                        (false, true) => true,
+                        (true, false) => true,
+                        (false, false) => panic!("unexpected"),
+                    }
+                })
+                .cloned()
+                .collect::<Vec<RangeInclusive<i64>>>();
+            split_ranges.sort_by_key(|r| r.start().clone());
+
+            ranges = Self::merge(&split_ranges);
         });
 
         result
     }
 
-    fn size(&self) -> Size {
-        self.points().iter().fold(
-            (Size {
-                min: Point::origin(),
-                max: Point::origin(),
-            }),
-            |acc, p| Size {
-                min: Point {
-                    x: acc.min.x.min(p.x),
-                    y: acc.min.y.min(p.y),
-                },
-                max: Point {
-                    x: acc.max.x.max(p.x),
-                    y: acc.max.y.max(p.y),
-                },
-            },
-        )
+    fn merge(split_ranges: &Vec<RangeInclusive<i64>>) -> Vec<RangeInclusive<i64>> {
+        let mut merged_ranges: Vec<RangeInclusive<i64>> = Vec::new();
+        split_ranges
+            .iter()
+            .for_each(|range| match merged_ranges.is_empty() {
+                true => {
+                    merged_ranges.push(range.clone());
+                }
+                false => {
+                    let len = merged_ranges.len();
+                    let last = &merged_ranges[len - 1];
+                    match last.end() == range.start() {
+                        true => {
+                            merged_ranges[len - 1] = *last.start()..=*range.end();
+                        }
+                        false => merged_ranges.push(range.clone()),
+                    }
+                }
+            });
+        merged_ranges
     }
 
-    fn as_bit_set(&self) -> BitSet {
-        let size = self.size();
+    fn xs_on_y(&self, on_y: i64) -> Vec<i64> {
+        let mut xs_on_y: Vec<i64> = self
+            .points
+            .iter()
+            .filter(|p| p.y == on_y)
+            .map(|p| p.x)
+            .collect();
+        xs_on_y.sort();
+        xs_on_y.dedup();
 
-        let mut display = BitSet::with_capacity(size.width() * size.height());
-
-        self.points().windows(2).for_each(|points| {
-            let from = &points[0];
-            let to = &points[1];
-
-            (from.y.min(to.y)..=from.y.max(to.y)).for_each(|y| {
-                (from.x.min(to.x)..=from.x.max(to.x)).for_each(|x| {
-                    let index =
-                        ((y - size.min.y) as usize) * size.width() + (x - size.min.x) as usize;
-
-                    display.insert(index);
-                })
-            })
-        });
-
-        let mut fill = vec![Point::origin().dig(&Step {
-            direction: self.steps[0].direction.clone(),
-            count: self.steps[0].count + 1,
-            color: String::new(),
-        })];
-
-        while !fill.is_empty() {
-            let mut next_fill: HashSet<Point> = HashSet::new();
-
-            fill.iter().for_each(|point| {
-                let index = ((point.y - size.min.y) as usize) * size.width()
-                    + (point.x - size.min.x) as usize;
-
-                display.insert(index);
-
-                let empty_points_around: HashSet<Point> = point
-                    .around()
-                    .into_iter()
-                    .filter(|point| size.contains(point))
-                    .filter(|candidate| !display.contains(candidate.to_index(&size)))
-                    .collect();
-
-                next_fill.extend(empty_points_around);
-            });
-
-            fill = Vec::from_iter(next_fill);
-        }
-
-        display
+        xs_on_y
     }
-}
 
-impl Display for DigPlan {
-    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
-        let size = self.size();
-
-        let mut display = self.as_bit_set();
-
-        (0..size.height()).for_each(|y| {
-            (0..size.width()).for_each(|x| {
-                let index = y * size.width() + x;
-
-                f.write_char(match display.contains(index) {
-                    true => match x as i32 == -size.min.x && y as i32 == -size.min.y {
-                        true => 'S',
-                        false => '#',
-                    },
-                    false => '.',
-                })
-                .unwrap();
-            });
-            f.write_char('\n').unwrap();
-        });
-
-        Ok(())
+    fn ranges_on_y(&self, on_y: i64) -> Vec<RangeInclusive<i64>> {
+        self.xs_on_y(on_y)
+            .chunks(2)
+            .map(|xs| (xs[0]..=xs[1]))
+            .collect::<Vec<RangeInclusive<i64>>>()
     }
 }
 
 struct Step {
     direction: Direction,
-    count: i32,
-    color: String,
+    count: i64,
 }
 
 impl Step {
-    fn parse(input: &str) -> Self {
+    fn parse(input: &str, part: &Part) -> Self {
         let segments: Vec<&str> = input.split(' ').collect();
 
-        let x = &segments[2].to_string()[1..segments[2].len() - 2];
-        Self {
-            direction: Direction::parse(segments[0]),
-            count: segments[1].parse().expect("number"),
-            color: segments[2][2..segments[2].len() - 1].to_string(),
+        match part {
+            One => Self {
+                direction: Direction::parse(segments[0]),
+                count: segments[1].parse().expect("number"),
+            },
+            Two => Self {
+                direction: match segments[2].chars().nth(7) {
+                    Some('0') => Right,
+                    Some('1') => Down,
+                    Some('2') => Left,
+                    Some('3') => Up,
+                    _ => panic!("unexpected"),
+                },
+                count: hex::decode(format!("0{}", &segments[2][2..=6]))
+                    .expect("string")
+                    .iter()
+                    .fold(0i64, |acc, b| acc << 8 | *b as i64),
+            },
         }
-    }
-}
-
-impl Display for Step {
-    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
-        f.write_fmt(format_args!(
-            "{} {} (#{})",
-            self.direction, self.count, self.color,
-        ))
     }
 }
 
@@ -199,21 +244,10 @@ impl Direction {
     }
 }
 
-impl Display for Direction {
-    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
-        f.write_char(match self {
-            Up => 'U',
-            Down => 'D',
-            Left => 'L',
-            Right => 'R',
-        })
-    }
-}
-
 #[derive(Clone, Copy, Hash, Eq, PartialEq)]
 struct Point {
-    x: i32,
-    y: i32,
+    x: i64,
+    y: i64,
 }
 
 impl Point {
@@ -223,66 +257,22 @@ impl Point {
 
     fn dig(&self, step: &Step) -> Point {
         match step.direction {
-            Direction::Up => Point {
+            Up => Point {
                 x: self.x,
                 y: self.y - step.count,
             },
-            Direction::Down => Point {
+            Down => Point {
                 x: self.x,
                 y: self.y + step.count,
             },
-            Direction::Left => Point {
+            Left => Point {
                 x: self.x - step.count,
                 y: self.y,
             },
-            Direction::Right => Point {
+            Right => Point {
                 x: self.x + step.count,
                 y: self.y,
             },
         }
-    }
-
-    fn around(&self) -> Vec<Point> {
-        vec![
-            Point {
-                x: self.x - 1,
-                y: self.y,
-            },
-            Point {
-                x: self.x + 1,
-                y: self.y,
-            },
-            Point {
-                x: self.x,
-                y: self.y - 1,
-            },
-            Point {
-                x: self.x,
-                y: self.y + 1,
-            },
-        ]
-    }
-
-    fn to_index(&self, size: &Size) -> usize {
-        ((self.y - size.min.y) as usize) * size.width() + (self.x - size.min.x) as usize
-    }
-}
-
-struct Size {
-    min: Point,
-    max: Point,
-}
-
-impl Size {
-    fn width(&self) -> usize {
-        (self.max.x - self.min.x + 1) as usize
-    }
-
-    fn height(&self) -> usize {
-        (self.max.y - self.min.y + 1) as usize
-    }
-
-    fn contains(&self, point: &Point) -> bool {
-        (self.min.x..=self.max.x).contains(&point.x) && (self.min.y..=self.max.y).contains(&point.y)
     }
 }
