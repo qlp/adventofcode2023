@@ -79,37 +79,13 @@ impl DigPlan {
             all_xs.sort();
             all_xs.dedup();
 
-            let split_previous: Vec<RangeInclusive<i64>> = ranges
-                .iter()
-                .flat_map(|range| {
-                    all_xs
-                        .iter()
-                        .filter(|x| range.contains(x))
-                        .collect::<Vec<&i64>>()
-                        .windows(2)
-                        .map(|x| *x[0]..=*x[1])
-                        .collect::<Vec<RangeInclusive<i64>>>()
-                })
-                .collect();
-
-            let split_current: Vec<RangeInclusive<i64>> = self
-                .ranges_on_y(current_y)
-                .iter()
-                .flat_map(|range| {
-                    all_xs
-                        .iter()
-                        .filter(|x| range.contains(x))
-                        .collect::<Vec<&i64>>()
-                        .windows(2)
-                        .map(|x| *x[0]..=*x[1])
-                        .collect::<Vec<RangeInclusive<i64>>>()
-                })
-                .collect();
+            let split_previous = Self::split(&ranges, &all_xs);
+            let split_current = Self::split(&self.ranges_on_y(current_y), &all_xs);
 
             let mut new_ranges: Vec<RangeInclusive<i64>> = Vec::new();
             new_ranges.extend(split_previous.clone());
             new_ranges.extend(split_current.clone());
-            new_ranges.sort_by_key(|r| r.start().clone());
+            new_ranges.sort_by_key(|r| *r.start());
             new_ranges.dedup();
 
             let diff_y = (current_y - previous_y) as u64;
@@ -142,7 +118,7 @@ impl DigPlan {
                 })
                 .cloned()
                 .collect::<Vec<RangeInclusive<i64>>>();
-            split_ranges.sort_by_key(|r| r.start().clone());
+            split_ranges.sort_by_key(|r| *r.start());
 
             ranges = Self::merge(&split_ranges);
         });
@@ -150,7 +126,22 @@ impl DigPlan {
         result
     }
 
-    fn merge(split_ranges: &Vec<RangeInclusive<i64>>) -> Vec<RangeInclusive<i64>> {
+    fn split(ranges: &[RangeInclusive<i64>], all_xs: &[i64]) -> Vec<RangeInclusive<i64>> {
+        ranges
+            .iter()
+            .flat_map(|range| {
+                all_xs
+                    .iter()
+                    .filter(|x| range.contains(x))
+                    .collect::<Vec<&i64>>()
+                    .windows(2)
+                    .map(|x| *x[0]..=*x[1])
+                    .collect::<Vec<RangeInclusive<i64>>>()
+            })
+            .collect()
+    }
+
+    fn merge(split_ranges: &[RangeInclusive<i64>]) -> Vec<RangeInclusive<i64>> {
         let mut merged_ranges: Vec<RangeInclusive<i64>> = Vec::new();
         split_ranges
             .iter()
