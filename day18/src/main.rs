@@ -89,16 +89,10 @@ impl DigPlan {
             new_ranges.dedup();
 
             let diff_y = (current_y - previous_y) as u64;
-            let surface_above = (diff_y - 1)
-                * ranges
-                    .iter()
-                    .map(|r| (r.end() - r.start() + 1) as u64)
-                    .sum::<u64>();
+            let rows_above = diff_y - 1;
+            let surface_above = rows_above * Self::surface_or_ranges(&ranges);
 
-            let surface_at_row = Self::merge(&new_ranges)
-                .iter()
-                .map(|r| (r.end() - r.start() + 1) as u64)
-                .sum::<u64>();
+            let surface_at_row = Self::surface_or_ranges(&Self::merge(&new_ranges));
 
             let surface = surface_above + surface_at_row;
             result += surface;
@@ -106,15 +100,13 @@ impl DigPlan {
             let mut split_ranges = new_ranges
                 .iter()
                 .filter(|candidate| {
-                    match (
-                        split_previous.contains(candidate),
-                        split_current.contains(candidate),
-                    ) {
-                        (true, true) => false,
-                        (false, true) => true,
-                        (true, false) => true,
-                        (false, false) => panic!("unexpected"),
-                    }
+                    let exist_in_previous_row = split_previous.contains(candidate);
+                    let exist_in_current_row = split_current.contains(candidate);
+
+                    // only keep ranges that are either in this row (they start here) or that
+                    // exist only in the previous row (they're untouched. Otherwise (they exist
+                    // in both) it marks the end.
+                    exist_in_previous_row ^ exist_in_current_row
                 })
                 .cloned()
                 .collect::<Vec<RangeInclusive<i64>>>();
@@ -124,6 +116,13 @@ impl DigPlan {
         });
 
         result
+    }
+
+    fn surface_or_ranges(merged_new_ranges: &Vec<RangeInclusive<i64>>) -> u64 {
+        merged_new_ranges
+            .iter()
+            .map(|r| (r.end() - r.start() + 1) as u64)
+            .sum::<u64>()
     }
 
     fn split(ranges: &[RangeInclusive<i64>], all_xs: &[i64]) -> Vec<RangeInclusive<i64>> {
