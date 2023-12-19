@@ -1,18 +1,20 @@
 use crate::Comparison::{GreaterThan, SmallerThan};
-use crate::Parameter::{A_PARAM, M_PARAM, S_PARAM, X_PARAM};
+use crate::Condition::Compare;
+use crate::Parameter::{A, M, S, X};
 use indexmap::IndexMap;
 use std::collections::HashMap;
 use std::fmt::{Display, Formatter, Write};
 use std::ops::RangeInclusive;
+use Condition::Fallback;
 
 const INPUT: &str = include_str!("input.txt");
 const EXAMPLE: &str = include_str!("example.txt");
 
 fn main() {
-    // print_answer("one (example)", &one(EXAMPLE), "19114");
-    // print_answer("one", &one(INPUT), "362930");
+    print_answer("one (example)", &one(EXAMPLE), "19114");
+    print_answer("one", &one(INPUT), "362930");
     print_answer("two (example)", &two(EXAMPLE), "167409079868000");
-    // print_answer("two", &two(INPUT), "");
+    print_answer("two", &two(INPUT), "");
 }
 
 fn print_answer(name: &str, actual: &str, expected: &str) {
@@ -37,8 +39,11 @@ fn one(input: &str) -> String {
 fn two(input: &str) -> String {
     let world = World::parse(input);
 
-    world
-        .accepted_part_domains(PartDomain::new())
+    let accepted = world.accepted_part_domains(&PartDomain::new());
+
+    accepted.iter().for_each(|domain| println!("{}", &domain));
+
+    accepted
         .iter()
         .map(|part_domain| {
             part_domain
@@ -83,8 +88,47 @@ impl World {
         }
     }
 
-    fn accepted_part_domains(&self, part_domain: PartDomain) -> Vec<PartDomain> {
-        Vec::new()
+    fn accepted_part_domains(&self, part_domain: &PartDomain) -> Vec<PartDomain> {
+        self.accepted_part_domains_rule(part_domain, &"in".to_string())
+    }
+
+    fn accepted_part_domains_rule(
+        &self,
+        part_domain: &PartDomain,
+        rule_set_name: &RuleSetName,
+    ) -> Vec<PartDomain> {
+        let rule_set = &self.rule_sets[rule_set_name];
+
+        let mut remaining_domain = Some(part_domain.clone());
+        let mut results: Vec<PartDomain> = rule_set
+            .rules
+            .iter()
+            .flat_map(|rule| match remaining_domain.clone() {
+                None => vec![],
+                Some(remaining) => {
+                    let (kept_domain, rule_domain) = rule.condition.split(&remaining);
+                    remaining_domain = kept_domain;
+
+                    match rule_domain {
+                        None => vec![],
+                        Some(some_rule_domain) => match &rule.action {
+                            Action::Done(decision) => match decision {
+                                Decision::Accept => vec![some_rule_domain],
+                                Decision::Reject => vec![],
+                            },
+                            Action::Move(next_rule_set_name) => self
+                                .accepted_part_domains_rule(&some_rule_domain, next_rule_set_name),
+                        },
+                    }
+                }
+            })
+            .collect();
+
+        if let Some(remaining) = remaining_domain {
+            results.push(remaining)
+        }
+
+        results
     }
 }
 
@@ -108,7 +152,6 @@ impl Display for World {
 struct RuleSet {
     name: RuleSetName,
     rules: Vec<Rule>,
-    fallback: Action,
 }
 
 impl RuleSet {
@@ -116,47 +159,36 @@ impl RuleSet {
         let condition_index = input.find('{').expect("start of conditions");
         let name: RuleSetName = input[0..condition_index].to_string();
 
-        let fallback_index = input.rfind(',').expect("at least one rule");
-        let fallback = Action::parse(&input[fallback_index + 1..input.len() - 1]);
-
-        let rules = input[condition_index + 1..fallback_index]
+        let rules = input[condition_index + 1..input.len() - 1]
             .split(',')
-            .map(|rule| {
-                let (condition, action) = rule.split_once(':').expect("condition and action");
-                let condition = Condition::parse(condition);
-                let action = Action::parse(action);
-
-                Rule { condition, action }
-            })
+            .map(Rule::parse)
             .collect();
 
-        RuleSet {
-            name,
-            rules,
-            fallback,
-        }
+        RuleSet { name, rules }
     }
 
     fn eval(&self, part: &Part) -> Action {
         self.rules
             .iter()
             .find(|rule| rule.condition.matches(part))
-            .map_or(self.fallback.clone(), |rule| rule.action.clone())
+            .expect("a rule to match")
+            .action
+            .clone()
     }
 }
 
 impl Display for RuleSet {
-    // px{a<2006:qkq,m>2090:A,rfg}
-
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
         f.write_fmt(format_args!("{}{{", self.name))?;
 
-        self.rules.iter().for_each(|rule| {
+        self.rules.iter().enumerate().for_each(|(index, rule)| {
+            if index == 0 {
+                f.write_char(',').unwrap();
+            }
             rule.fmt(f).unwrap();
-            f.write_char(',').unwrap();
         });
 
-        f.write_fmt(format_args!("{}}}", self.fallback))
+        Ok(())
     }
 }
 
@@ -164,6 +196,21 @@ impl Display for RuleSet {
 struct Rule {
     condition: Condition,
     action: Action,
+}
+
+impl Rule {
+    fn parse(input: &str) -> Self {
+        match input.split_once(':') {
+            None => Rule {
+                condition: Fallback,
+                action: Action::parse(input),
+            },
+            Some((condition, action)) => Rule {
+                condition: Compare(CompareCondition::parse(condition)),
+                action: Action::parse(action),
+            },
+        }
+    }
 }
 
 impl Display for Rule {
@@ -215,17 +262,87 @@ impl Action {
 }
 
 #[derive(Clone)]
-struct Condition {
+enum Condition {
+    Compare(CompareCondition),
+    Fallback,
+}
+
+impl Condition {
+    fn matches(&self, part: &Part) -> bool {
+        match self {
+            Compare(compare_condition) => compare_condition.matches(part),
+            Fallback => true,
+        }
+    }
+
+    fn split(&self, part_domain: &PartDomain) -> (Option<PartDomain>, Option<PartDomain>) {
+        match self {
+            Compare(compare_condition) => compare_condition.split(part_domain),
+            Fallback => (None, Some(part_domain.clone())),
+        }
+    }
+}
+
+impl Display for Condition {
+    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+        match self {
+            Compare(compare_condition) => compare_condition.fmt(f),
+            Fallback => f.write_char('*'),
+        }
+    }
+}
+
+#[derive(Clone)]
+struct CompareCondition {
     parameter: Parameter,
     comparison: Comparison,
     value: u64,
 }
 
-impl Condition {
+impl CompareCondition {
     fn matches(&self, part: &Part) -> bool {
         match self.comparison {
             GreaterThan => part.values[&self.parameter] > self.value,
             SmallerThan => part.values[&self.parameter] < self.value,
+        }
+    }
+
+    fn split(&self, part_domain: &PartDomain) -> (Option<PartDomain>, Option<PartDomain>) {
+        let range = &part_domain.domains[&self.parameter];
+        let start = *range.start();
+        let end = *range.end();
+
+        match self.comparison {
+            GreaterThan => {
+                let unchanged = start > self.value;
+                let removed = end < self.value;
+                let reduced = range.contains(&self.value);
+
+                match (unchanged, removed, reduced) {
+                    (true, false, false) => (None, Some(part_domain.clone())),
+                    (false, true, false) => (Some(part_domain.clone()), None),
+                    (false, false, true) => (
+                        Some(part_domain.with_parameter(&self.parameter, start..=self.value)),
+                        Some(part_domain.with_parameter(&self.parameter, self.value + 1..=end)),
+                    ),
+                    _ => panic!("unexpected"),
+                }
+            }
+            SmallerThan => {
+                let unchanged = end < self.value;
+                let removed = start > self.value;
+                let reduced = range.contains(&self.value);
+
+                match (unchanged, removed, reduced) {
+                    (true, false, false) => (None, Some(part_domain.clone())),
+                    (false, true, false) => (Some(part_domain.clone()), None),
+                    (false, false, true) => (
+                        Some(part_domain.with_parameter(&self.parameter, self.value..=end)),
+                        Some(part_domain.with_parameter(&self.parameter, start..=self.value - 1)),
+                    ),
+                    _ => panic!("unexpected"),
+                }
+            }
         }
     }
 
@@ -235,7 +352,7 @@ impl Condition {
         let comparison = Comparison::parse(&input[comparison_index..=comparison_index]);
         let value: u64 = input[comparison_index + 1..].parse().expect("number");
 
-        Condition {
+        CompareCondition {
             parameter,
             comparison,
             value,
@@ -243,7 +360,7 @@ impl Condition {
     }
 }
 
-impl Display for Condition {
+impl Display for CompareCondition {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
         self.parameter.fmt(f)?;
         self.comparison.fmt(f)?;
@@ -254,19 +371,19 @@ impl Display for Condition {
 
 #[derive(Clone, Eq, PartialEq, Hash)]
 enum Parameter {
-    X_PARAM,
-    M_PARAM,
-    A_PARAM,
-    S_PARAM,
+    X,
+    M,
+    A,
+    S,
 }
 
 impl Parameter {
     fn parse(input: &str) -> Self {
         match input {
-            "x" => Parameter::X_PARAM,
-            "m" => Parameter::M_PARAM,
-            "a" => Parameter::A_PARAM,
-            "s" => Parameter::S_PARAM,
+            "x" => Parameter::X,
+            "m" => Parameter::M,
+            "a" => Parameter::A,
+            "s" => Parameter::S,
             _ => panic!("unexpected parameter"),
         }
     }
@@ -275,10 +392,10 @@ impl Parameter {
 impl Display for Parameter {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
         f.write_char(match self {
-            X_PARAM => 'x',
-            M_PARAM => 'm',
-            A_PARAM => 'a',
-            S_PARAM => 's',
+            X => 'x',
+            M => 'm',
+            A => 'a',
+            S => 's',
         })
     }
 }
@@ -308,6 +425,7 @@ impl Display for Comparison {
     }
 }
 
+#[derive(Clone)]
 struct PartDomain {
     domains: HashMap<Parameter, RangeInclusive<u64>>,
 }
@@ -315,11 +433,45 @@ struct PartDomain {
 impl PartDomain {
     fn new() -> Self {
         Self {
-            domains: [X_PARAM, M_PARAM, A_PARAM, S_PARAM]
+            domains: [X, M, A, S]
                 .iter()
                 .map(|param| (param.clone(), 1..=4000))
                 .collect(),
         }
+    }
+
+    fn with_parameter(&self, parameter: &Parameter, new_value: RangeInclusive<u64>) -> Self {
+        Self {
+            domains: self
+                .domains
+                .iter()
+                .map(|(key, current_value)| {
+                    (
+                        key.clone(),
+                        match key == parameter {
+                            true => new_value.clone(),
+                            false => current_value.clone(),
+                        },
+                    )
+                })
+                .collect(),
+        }
+    }
+}
+
+impl Display for PartDomain {
+    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+        f.write_fmt(format_args!(
+            "{{x={}..{},m={}..{},a={}..{},s={}..{}}}",
+            self.domains[&X].start(),
+            self.domains[&X].end(),
+            self.domains[&M].start(),
+            self.domains[&M].end(),
+            self.domains[&A].start(),
+            self.domains[&A].end(),
+            self.domains[&S].start(),
+            self.domains[&S].end()
+        ))
     }
 }
 
@@ -352,10 +504,7 @@ impl Display for Part {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
         f.write_fmt(format_args!(
             "{{x={},m={},a={},s={}}}",
-            self.values[&X_PARAM],
-            self.values[&M_PARAM],
-            self.values[&A_PARAM],
-            self.values[&S_PARAM]
+            self.values[&X], self.values[&M], self.values[&A], self.values[&S]
         ))
     }
 }
