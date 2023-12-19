@@ -2,16 +2,16 @@ use crate::Comparison::{GreaterThan, SmallerThan};
 use crate::Parameter::{A_PARAM, M_PARAM, S_PARAM, X_PARAM};
 use indexmap::IndexMap;
 use std::collections::HashMap;
-use std::fmt::{Debug, Display, Formatter, Pointer, Write};
+use std::fmt::{Display, Formatter, Write};
 use std::ops::RangeInclusive;
 
 const INPUT: &str = include_str!("input.txt");
 const EXAMPLE: &str = include_str!("example.txt");
 
 fn main() {
-    print_answer("one (example)", &one(EXAMPLE), "19114");
-    print_answer("one", &one(INPUT), "362930");
-    // print_answer("two (example)", &two(EXAMPLE), "");
+    // print_answer("one (example)", &one(EXAMPLE), "19114");
+    // print_answer("one", &one(INPUT), "362930");
+    print_answer("two (example)", &two(EXAMPLE), "167409079868000");
     // print_answer("two", &two(INPUT), "");
 }
 
@@ -30,12 +30,25 @@ fn one(input: &str) -> String {
         .iter()
         .filter(|part| world.eval(part) == Decision::Accept)
         .map(|part| part.rating())
-        .sum::<u32>()
+        .sum::<u64>()
         .to_string()
 }
 
 fn two(input: &str) -> String {
-    String::new()
+    let world = World::parse(input);
+
+    world
+        .accepted_part_domains(PartDomain::new())
+        .iter()
+        .map(|part_domain| {
+            part_domain
+                .domains
+                .values()
+                .map(|domain| domain.end() - domain.start() + 1)
+                .product::<u64>()
+        })
+        .sum::<u64>()
+        .to_string()
 }
 
 type RuleSetName = String;
@@ -51,10 +64,10 @@ impl World {
 
         let rule_sets: IndexMap<RuleSetName, RuleSet> = rule_sets
             .split('\n')
-            .map(|line| RuleSet::parse(line))
+            .map(RuleSet::parse)
             .map(|rule_set| (rule_set.name.clone(), rule_set))
             .collect();
-        let parts: Vec<Part> = parts.split('\n').map(|line| Part::parse(line)).collect();
+        let parts: Vec<Part> = parts.split('\n').map(Part::parse).collect();
 
         Self { rule_sets, parts }
     }
@@ -64,14 +77,14 @@ impl World {
     }
 
     fn eval_rule(&self, part: &Part, rule_set: &RuleSet) -> Decision {
-        // println!("{}: {}", part, rule_set);
-
-        let result = match rule_set.eval(part) {
+        match rule_set.eval(part) {
             Action::Done(decision) => decision,
             Action::Move(rule_set_name) => self.eval_rule(part, &self.rule_sets[&rule_set_name]),
-        };
+        }
+    }
 
-        result
+    fn accepted_part_domains(&self, part_domain: PartDomain) -> Vec<PartDomain> {
+        Vec::new()
     }
 }
 
@@ -205,7 +218,7 @@ impl Action {
 struct Condition {
     parameter: Parameter,
     comparison: Comparison,
-    value: u32,
+    value: u64,
 }
 
 impl Condition {
@@ -220,7 +233,7 @@ impl Condition {
         let comparison_index = input.find('<').or(input.find('>')).expect("< or >");
         let parameter = Parameter::parse(&input[0..comparison_index]);
         let comparison = Comparison::parse(&input[comparison_index..=comparison_index]);
-        let value: u32 = input[comparison_index + 1..].parse().expect("number");
+        let value: u64 = input[comparison_index + 1..].parse().expect("number");
 
         Condition {
             parameter,
@@ -296,7 +309,7 @@ impl Display for Comparison {
 }
 
 struct PartDomain {
-    domains: HashMap<Parameter, RangeInclusive<u32>>,
+    domains: HashMap<Parameter, RangeInclusive<u64>>,
 }
 
 impl PartDomain {
@@ -311,7 +324,7 @@ impl PartDomain {
 }
 
 struct Part {
-    values: HashMap<Parameter, u32>,
+    values: HashMap<Parameter, u64>,
 }
 
 impl Part {
@@ -323,14 +336,14 @@ impl Part {
                 .map(|(parameter, value)| {
                     (
                         Parameter::parse(parameter),
-                        value.parse::<u32>().expect("number"),
+                        value.parse::<u64>().expect("number"),
                     )
                 })
                 .collect(),
         }
     }
 
-    fn rating(&self) -> u32 {
+    fn rating(&self) -> u64 {
         self.values.values().sum()
     }
 }
