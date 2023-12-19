@@ -3,13 +3,14 @@ use crate::Parameter::{A_PARAM, M_PARAM, S_PARAM, X_PARAM};
 use indexmap::IndexMap;
 use std::collections::HashMap;
 use std::fmt::{Debug, Display, Formatter, Pointer, Write};
+use std::ops::RangeInclusive;
 
 const INPUT: &str = include_str!("input.txt");
 const EXAMPLE: &str = include_str!("example.txt");
 
 fn main() {
     print_answer("one (example)", &one(EXAMPLE), "19114");
-    print_answer("one", &one(INPUT), "");
+    print_answer("one", &one(INPUT), "362930");
     // print_answer("two (example)", &two(EXAMPLE), "");
     // print_answer("two", &two(INPUT), "");
 }
@@ -24,20 +25,10 @@ fn print_answer(name: &str, actual: &str, expected: &str) {
 fn one(input: &str) -> String {
     let world = World::parse(input);
 
-    println!("{world}");
-
-    let accepted = &world
+    world
         .parts
         .iter()
         .filter(|part| world.eval(part) == Decision::Accept)
-        .collect::<Vec<&Part>>();
-
-    accepted.iter().for_each(|part| {
-        println!("{}", part);
-    });
-
-    accepted
-        .iter()
         .map(|part| part.rating())
         .sum::<u32>()
         .to_string()
@@ -301,6 +292,21 @@ impl Display for Comparison {
             GreaterThan => '>',
             SmallerThan => '<',
         })
+    }
+}
+
+struct PartDomain {
+    domains: HashMap<Parameter, RangeInclusive<u32>>,
+}
+
+impl PartDomain {
+    fn new() -> Self {
+        Self {
+            domains: [X_PARAM, M_PARAM, A_PARAM, S_PARAM]
+                .iter()
+                .map(|param| (param.clone(), 1..=4000))
+                .collect(),
+        }
     }
 }
 
