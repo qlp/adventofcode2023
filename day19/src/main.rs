@@ -1,11 +1,11 @@
+use std::collections::HashMap;
+use std::ops::RangeInclusive;
+
+use Condition::Fallback;
+
 use crate::Comparison::{GreaterThan, SmallerThan};
 use crate::Condition::Compare;
 use crate::Parameter::{A, M, S, X};
-use indexmap::IndexMap;
-use std::collections::HashMap;
-use std::fmt::{Display, Formatter, Write};
-use std::ops::RangeInclusive;
-use Condition::Fallback;
 
 const INPUT: &str = include_str!("input.txt");
 const EXAMPLE: &str = include_str!("example.txt");
@@ -14,7 +14,7 @@ fn main() {
     print_answer("one (example)", &one(EXAMPLE), "19114");
     print_answer("one", &one(INPUT), "362930");
     print_answer("two (example)", &two(EXAMPLE), "167409079868000");
-    print_answer("two", &two(INPUT), "");
+    print_answer("two", &two(INPUT), "116365820987729");
 }
 
 fn print_answer(name: &str, actual: &str, expected: &str) {
@@ -37,21 +37,10 @@ fn one(input: &str) -> String {
 }
 
 fn two(input: &str) -> String {
-    let world = World::parse(input);
-
-    let accepted = world.accepted_part_domains(&PartDomain::new());
-
-    accepted.iter().for_each(|domain| println!("{}", &domain));
-
-    accepted
+    World::parse(input)
+        .accepted_part_domains(&PartDomain::new())
         .iter()
-        .map(|part_domain| {
-            part_domain
-                .domains
-                .values()
-                .map(|domain| domain.end() - domain.start() + 1)
-                .product::<u64>()
-        })
+        .map(|part_domain| part_domain.combinations())
         .sum::<u64>()
         .to_string()
 }
@@ -59,7 +48,7 @@ fn two(input: &str) -> String {
 type RuleSetName = String;
 
 struct World {
-    rule_sets: IndexMap<RuleSetName, RuleSet>,
+    rule_sets: HashMap<RuleSetName, RuleSet>,
     parts: Vec<Part>,
 }
 
@@ -67,7 +56,7 @@ impl World {
     fn parse(input: &str) -> Self {
         let (rule_sets, parts) = input.split_once("\n\n").expect("two sections");
 
-        let rule_sets: IndexMap<RuleSetName, RuleSet> = rule_sets
+        let rule_sets: HashMap<RuleSetName, RuleSet> = rule_sets
             .split('\n')
             .map(RuleSet::parse)
             .map(|rule_set| (rule_set.name.clone(), rule_set))
@@ -132,23 +121,6 @@ impl World {
     }
 }
 
-impl Display for World {
-    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
-        self.rule_sets.iter().for_each(|(_, rule_set)| {
-            rule_set.fmt(f).unwrap();
-            f.write_char('\n').unwrap();
-        });
-
-        f.write_char('\n').unwrap();
-        self.parts.iter().for_each(|part| {
-            part.fmt(f).unwrap();
-            f.write_char('\n').unwrap();
-        });
-
-        Ok(())
-    }
-}
-
 struct RuleSet {
     name: RuleSetName,
     rules: Vec<Rule>,
@@ -177,21 +149,6 @@ impl RuleSet {
     }
 }
 
-impl Display for RuleSet {
-    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
-        f.write_fmt(format_args!("{}{{", self.name))?;
-
-        self.rules.iter().enumerate().for_each(|(index, rule)| {
-            if index == 0 {
-                f.write_char(',').unwrap();
-            }
-            rule.fmt(f).unwrap();
-        });
-
-        Ok(())
-    }
-}
-
 #[derive(Clone)]
 struct Rule {
     condition: Condition,
@@ -213,42 +170,16 @@ impl Rule {
     }
 }
 
-impl Display for Rule {
-    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
-        self.condition.fmt(f)?;
-        f.write_char(':')?;
-        self.action.fmt(f)
-    }
-}
-
 #[derive(Clone)]
 enum Action {
     Done(Decision),
     Move(RuleSetName),
 }
 
-impl Display for Action {
-    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
-        match self {
-            Action::Done(decision) => decision.fmt(f),
-            Action::Move(rule_set_name) => f.write_fmt(format_args!("{}", rule_set_name)),
-        }
-    }
-}
-
 #[derive(Clone, Eq, PartialEq)]
 enum Decision {
     Accept,
     Reject,
-}
-
-impl Display for Decision {
-    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
-        f.write_char(match self {
-            Decision::Accept => 'A',
-            Decision::Reject => 'R',
-        })
-    }
 }
 
 impl Action {
@@ -279,15 +210,6 @@ impl Condition {
         match self {
             Compare(compare_condition) => compare_condition.split(part_domain),
             Fallback => (None, Some(part_domain.clone())),
-        }
-    }
-}
-
-impl Display for Condition {
-    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
-        match self {
-            Compare(compare_condition) => compare_condition.fmt(f),
-            Fallback => f.write_char('*'),
         }
     }
 }
@@ -360,15 +282,6 @@ impl CompareCondition {
     }
 }
 
-impl Display for CompareCondition {
-    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
-        self.parameter.fmt(f)?;
-        self.comparison.fmt(f)?;
-
-        f.write_fmt(format_args!("{}", self.value))
-    }
-}
-
 #[derive(Clone, Eq, PartialEq, Hash)]
 enum Parameter {
     X,
@@ -389,17 +302,6 @@ impl Parameter {
     }
 }
 
-impl Display for Parameter {
-    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
-        f.write_char(match self {
-            X => 'x',
-            M => 'm',
-            A => 'a',
-            S => 's',
-        })
-    }
-}
-
 #[derive(Clone)]
 enum Comparison {
     GreaterThan,
@@ -413,15 +315,6 @@ impl Comparison {
             ">" => GreaterThan,
             _ => panic!("unexpected comparison"),
         }
-    }
-}
-
-impl Display for Comparison {
-    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
-        f.write_char(match self {
-            GreaterThan => '>',
-            SmallerThan => '<',
-        })
     }
 }
 
@@ -457,21 +350,12 @@ impl PartDomain {
                 .collect(),
         }
     }
-}
 
-impl Display for PartDomain {
-    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
-        f.write_fmt(format_args!(
-            "{{x={}..{},m={}..{},a={}..{},s={}..{}}}",
-            self.domains[&X].start(),
-            self.domains[&X].end(),
-            self.domains[&M].start(),
-            self.domains[&M].end(),
-            self.domains[&A].start(),
-            self.domains[&A].end(),
-            self.domains[&S].start(),
-            self.domains[&S].end()
-        ))
+    fn combinations(&self) -> u64 {
+        self.domains
+            .values()
+            .map(|domain| domain.end() - domain.start() + 1)
+            .product::<u64>()
     }
 }
 
@@ -497,14 +381,5 @@ impl Part {
 
     fn rating(&self) -> u64 {
         self.values.values().sum()
-    }
-}
-
-impl Display for Part {
-    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
-        f.write_fmt(format_args!(
-            "{{x={},m={},a={},s={}}}",
-            self.values[&X], self.values[&M], self.values[&A], self.values[&S]
-        ))
     }
 }
