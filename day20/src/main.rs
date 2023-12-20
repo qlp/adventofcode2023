@@ -61,7 +61,7 @@ impl World {
                 .find(|machine| machine.kind == Broadcaster)
                 .expect("broadcaster");
 
-            broadcaster.current = Some(Low);
+            broadcaster.current = vec![Low];
 
             let (mut added_low, mut added_high) = (1u64, 0u64);
 
@@ -69,14 +69,14 @@ impl World {
                 total_low += added_low;
                 total_high += added_high;
 
-                let pulses: Vec<(MachineName, MachineName, Option<Pulse>)> = self
+                let pulses: Vec<(MachineName, MachineName, Vec<Pulse>)> = self
                     .machines
                     .iter()
                     .flat_map(|machine| {
                         machine
                             .outgoing
                             .iter()
-                            .map(|name| (machine.name(), name.clone(), machine.current))
+                            .map(|name| (machine.name(), name.clone(), machine.current.clone()))
                     })
                     .collect();
 
@@ -92,7 +92,7 @@ impl World {
                         pulses
                             .iter()
                             .filter(|(_, to, _)| *to == machine.name())
-                            .map(|(from, _, pulse)| (from.clone(), *pulse))
+                            .map(|(from, _, pulse)| (from.clone(), pulse.clone()))
                             .collect(),
                     )
                 });
@@ -105,17 +105,23 @@ impl World {
                 //     println!("{}", machine);
                 // });
 
-                (added_low, added_high) =
-                    pulses
-                        .iter()
-                        .fold(
+                (added_low, added_high) = pulses.iter().fold(
+                    (0, 0),
+                    |(outer_added_low, outer_added_high), (_, _, inner_pulses)| {
+                        let (inner_added_low, inner_added_high) = inner_pulses.iter().fold(
                             (0, 0),
-                            |(added_low, added_high), (_, _, pulse)| match pulse {
-                                None => (added_low, added_high),
-                                Some(Low) => (added_low + 1, added_high),
-                                Some(High) => (added_low, added_high + 1),
+                            |(inner_added_low, inner_added_high), inner_pulse| match inner_pulse {
+                                Low => (inner_added_low + 1, inner_added_high),
+                                High => (inner_added_low, inner_added_high + 1),
                             },
+                        );
+
+                        (
+                            outer_added_low + inner_added_low,
+                            outer_added_high + inner_added_high,
                         )
+                    },
+                )
             }
         });
 
@@ -137,8 +143,8 @@ type MachineName = String;
 
 struct Machine {
     kind: Kind,
-    next: Option<Pulse>,
-    current: Option<Pulse>,
+    next: Vec<Pulse>,
+    current: Vec<Pulse>,
     outgoing: Vec<String>,
 }
 
@@ -149,8 +155,8 @@ impl Machine {
         Self {
             kind: Kind::parse(kind),
             outgoing: outgoing.split(", ").map(|s| s.to_string()).collect(),
-            next: None,
-            current: None,
+            next: vec![],
+            current: vec![],
         }
     }
 
@@ -162,102 +168,65 @@ impl Machine {
         }
     }
 
-    fn process(&mut self, pulses: HashMap<MachineName, Option<Pulse>>) {
-        self.next = match self.kind.clone() {
-            Broadcaster => None,
+    fn process(&mut self, pulses_by_machine: HashMap<MachineName, Vec<Pulse>>) {
+        self.next = vec![];
+
+        match self.kind.clone() {
+            Broadcaster => {}
             FlipFlop(name, state) => {
-                let low_pulse_count = pulses
-                    .iter()
-                    .filter(|(_, pulse)| &Some(Low) == *pulse)
-                    .count();
+                pulses_by_machine.iter().for_each(|(machine_name, pulses)| {
+                    pulses.iter().for_each(|pulse| match pulse {
+                        High => {}
+                        Low => {
+                            let new_state = state.flip();
+                            self.kind = FlipFlop(name.clone(), new_state);
 
-                match low_pulse_count {
-                    0 => None,
-                    _ => {
-                        // if low_pulse_count % 2 == 1 {
-                        let new_state = state.flip();
-                        self.kind = FlipFlop(name.clone(), new_state);
-
-                        match new_state {
-                            On => Some(High),
-                            Off => Some(Low),
+                            self.next.push(match new_state {
+                                On => High,
+                                Off => Low,
+                            });
                         }
-                        // } else {
-                        //     match state {
-                        //         On => Some(High),
-                        //         Off => Some(Low),
-                        //     }
-                        // }
-                    }
-                }
+                    })
+                });
             }
-            // match (
-            //         pulses.iter().any(|(_, pulse)| Some(Low) == *pulse),
-            //         pulses.iter().any(|(_, pulse)| Some(High) == *pulse),
-            //     ) {
-            //         (_, true) => None,
-            //         (true, false) => {
-            //             let new_state = state.flip();
-            //             self.kind = FlipFlop(name.clone(), new_state);
-            //
-            //             match new_state {
-            //                 On => Some(High),
-            //                 Off => Some(Low),
-            //             }
-            //         }
-            //         _ => None,
-            //     }
-            // },
             Conjunction(name, state) => {
-                match pulses.iter().filter(|(_, pulse)| pulse.is_some()).count() {
-                    0 => None,
-                    _ => {
-                        let mut new_state = state.clone();
-                        pulses.iter().for_each(|(machine_name, pulse)| match pulse {
-                            None => match state.is_empty() {
-                                true => {
-                                    new_state.insert(machine_name.clone(), Low);
-                                }
-                                false => {}
-                            },
-                            Some(pulse) => {
-                                new_state.insert(machine_name.clone(), *pulse);
-                            }
-                        });
+                let mut new_state = state.clone();
+                if new_state.is_empty() {
+                    pulses_by_machine.keys().for_each(|key| {
+                        new_state.insert(key.clone(), Low);
+                    });
+                }
+
+                pulses_by_machine.iter().for_each(|(machine_name, pulses)| {
+                    pulses.iter().for_each(|pulse| {
+                        new_state.insert(machine_name.clone(), *pulse);
+
                         self.kind = Conjunction(name.clone(), new_state.clone());
 
                         let all_high = new_state.iter().all(|(_, pulse)| pulse == &High);
 
-                        match all_high {
-                            true => Some(Low),
-                            false => Some(High),
-                        }
-                    }
-                }
+                        self.next.push(match all_high {
+                            true => Low,
+                            false => High,
+                        });
+                    });
+                });
             }
-        }
+        };
     }
 
     fn execute(&mut self) {
-        self.current = self.next;
+        self.current = self.next.clone();
     }
 }
 
 impl Display for Machine {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
-        match self.current {
-            None => f.write_fmt(format_args!(
-                "{} -> {}",
-                self.kind,
-                self.outgoing.join(", ")
-            )),
-            Some(pulse) => f.write_fmt(format_args!(
-                "{} -{}-> {}",
-                self.kind,
-                pulse,
-                self.outgoing.join(", ")
-            )),
-        }
+        f.write_fmt(format_args!(
+            "{} -> {}",
+            self.kind,
+            self.outgoing.join(", ")
+        ))
     }
 }
 
