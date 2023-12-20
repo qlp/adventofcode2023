@@ -1,3 +1,4 @@
+use rayon::prelude::*;
 use std::collections::HashMap;
 use std::fmt::{Debug, Display, Formatter, Write};
 
@@ -12,11 +13,10 @@ const EXAMPLE_1: &str = include_str!("example-1.txt");
 const EXAMPLE_2: &str = include_str!("example-2.txt");
 
 fn main() {
-    print_answer("one (example 1)", &one(EXAMPLE_1), "32000000");
-    print_answer("one (example 2)", &one(EXAMPLE_2), "11687500");
-    print_answer("one", &one(INPUT), "623180432 too low, 734648432 too high");
-    // print_answer("two (example)", &two(EXAMPLE), "167409079868000");
-    // print_answer("two", &two(INPUT), "116365820987729");
+    // print_answer("one (example 1)", &one(EXAMPLE_1), "32000000");
+    // print_answer("one (example 2)", &one(EXAMPLE_2), "11687500");
+    // print_answer("one", &one(INPUT), "681194780");
+    print_answer("two", &two(INPUT), "238593356738827");
 }
 
 fn print_answer(name: &str, actual: &str, expected: &str) {
@@ -27,15 +27,108 @@ fn print_answer(name: &str, actual: &str, expected: &str) {
 }
 
 fn one(input: &str) -> String {
-    let mut world = World::parse(input);
-
-    // println!("{world}");
-
-    world.push(1000).to_string()
+    World::parse(input).push(1000, |_| false).0.to_string()
 }
 
 fn two(input: &str) -> String {
-    String::new()
+    let other_world = World::parse(input);
+
+    let rx_sender = other_world
+        .machines
+        .iter()
+        .find(|machine| machine.outgoing.contains(&"rx".to_string()))
+        .expect("rx to exist");
+
+    let rx_inputs: Vec<&Machine> = other_world
+        .machines
+        .iter()
+        .filter(|machine| machine.outgoing.contains(&rx_sender.name()))
+        .collect();
+
+    println!("{}", other_world);
+    println!("rx: {rx_sender}");
+
+    rx_inputs.iter().for_each(|input| {
+        println!("rx sender input: {input}");
+    });
+
+    let (_, vg_presses) = World::parse(input).push(u64::MAX, |world| {
+        world
+            .machines
+            .iter()
+            .find(|machine| machine.name() == *"vg")
+            .expect("vg to exist")
+            .current
+            .iter()
+            .any(|pulse| *pulse == High)
+    });
+    println!("presses of 'vg': {vg_presses}");
+
+    let (_, kp_presses) = World::parse(input).push(u64::MAX, |world| {
+        world
+            .machines
+            .iter()
+            .find(|machine| machine.name() == *"kp")
+            .expect("kp to exist")
+            .current
+            .iter()
+            .any(|pulse| *pulse == High)
+    });
+    println!("presses of 'kp': {kp_presses}");
+
+    let (_, gc_presses) = World::parse(input).push(u64::MAX, |world| {
+        world
+            .machines
+            .iter()
+            .find(|machine| machine.name() == *"gc")
+            .expect("gc to exist")
+            .current
+            .iter()
+            .any(|pulse| *pulse == High)
+    });
+    println!("presses of 'gc': {gc_presses}");
+
+    let (_, tx_presses) = World::parse(input).push(u64::MAX, |world| {
+        world
+            .machines
+            .iter()
+            .find(|machine| machine.name() == *"tx")
+            .expect("tx to exist")
+            .current
+            .iter()
+            .any(|pulse| *pulse == High)
+    });
+
+    println!("presses of 'tx': {tx_presses}");
+
+    let result = vec![vg_presses, kp_presses, gc_presses, tx_presses]
+        .into_iter()
+        .reduce(lcm)
+        .expect("value");
+
+    result.to_string()
+}
+
+fn lcm(first: u64, second: u64) -> u64 {
+    first * second / gcd(first, second)
+}
+
+fn gcd(first: u64, second: u64) -> u64 {
+    let mut max = first;
+    let mut min = second;
+    if min > max {
+        std::mem::swap(&mut max, &mut min);
+    }
+
+    loop {
+        let res = max % min;
+        if res == 0 {
+            return min;
+        }
+
+        max = min;
+        min = res;
+    }
 }
 
 struct World {
@@ -49,10 +142,12 @@ impl World {
         }
     }
 
-    fn push(&mut self, times: u64) -> u64 {
+    fn push(&mut self, times: u64, or: fn(&World) -> bool) -> (u64, u64) {
         let (mut total_low, mut total_high) = (0u64, 0u64);
+        let mut time = 0;
 
-        (1..=times).for_each(|time| {
+        while time < times && !or(self) {
+            time += 1;
             // println!("time: {}", time);
 
             let broadcaster = self
@@ -121,11 +216,15 @@ impl World {
                             outer_added_high + inner_added_high,
                         )
                     },
-                )
-            }
-        });
+                );
 
-        total_low * total_high
+                if or(self) {
+                    break;
+                }
+            }
+        }
+
+        (total_low * total_high, time)
     }
 }
 
