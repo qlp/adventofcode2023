@@ -1,6 +1,6 @@
 use rayon::prelude::*;
 use std::collections::HashMap;
-use std::fmt::{Debug, Display, Formatter, Write};
+use std::fmt::{Display, Formatter};
 
 use State::On;
 
@@ -13,9 +13,9 @@ const EXAMPLE_1: &str = include_str!("example-1.txt");
 const EXAMPLE_2: &str = include_str!("example-2.txt");
 
 fn main() {
-    // print_answer("one (example 1)", &one(EXAMPLE_1), "32000000");
-    // print_answer("one (example 2)", &one(EXAMPLE_2), "11687500");
-    // print_answer("one", &one(INPUT), "681194780");
+    print_answer("one (example 1)", &one(EXAMPLE_1), "32000000");
+    print_answer("one (example 2)", &one(EXAMPLE_2), "11687500");
+    print_answer("one", &one(INPUT), "681194780");
     print_answer("two", &two(INPUT), "238593356738827");
 }
 
@@ -31,82 +31,44 @@ fn one(input: &str) -> String {
 }
 
 fn two(input: &str) -> String {
-    let other_world = World::parse(input);
+    let analyse_world = World::parse(input);
 
-    let rx_sender = other_world
+    let rx_sender_name = analyse_world
         .machines
         .iter()
         .find(|machine| machine.outgoing.contains(&"rx".to_string()))
-        .expect("rx to exist");
+        .expect("rx to exist")
+        .name();
 
-    let rx_inputs: Vec<&Machine> = other_world
+    let rx_input_names: Vec<String> = analyse_world
         .machines
         .iter()
-        .filter(|machine| machine.outgoing.contains(&rx_sender.name()))
+        .filter(|machine| machine.outgoing.contains(&rx_sender_name))
+        .map(|machine| machine.name())
         .collect();
 
-    println!("{}", other_world);
-    println!("rx: {rx_sender}");
-
-    rx_inputs.iter().for_each(|input| {
-        println!("rx sender input: {input}");
-    });
-
-    let (_, vg_presses) = World::parse(input).push(u64::MAX, |world| {
-        world
-            .machines
-            .iter()
-            .find(|machine| machine.name() == *"vg")
-            .expect("vg to exist")
-            .current
-            .iter()
-            .any(|pulse| *pulse == High)
-    });
-    println!("presses of 'vg': {vg_presses}");
-
-    let (_, kp_presses) = World::parse(input).push(u64::MAX, |world| {
-        world
-            .machines
-            .iter()
-            .find(|machine| machine.name() == *"kp")
-            .expect("kp to exist")
-            .current
-            .iter()
-            .any(|pulse| *pulse == High)
-    });
-    println!("presses of 'kp': {kp_presses}");
-
-    let (_, gc_presses) = World::parse(input).push(u64::MAX, |world| {
-        world
-            .machines
-            .iter()
-            .find(|machine| machine.name() == *"gc")
-            .expect("gc to exist")
-            .current
-            .iter()
-            .any(|pulse| *pulse == High)
-    });
-    println!("presses of 'gc': {gc_presses}");
-
-    let (_, tx_presses) = World::parse(input).push(u64::MAX, |world| {
-        world
-            .machines
-            .iter()
-            .find(|machine| machine.name() == *"tx")
-            .expect("tx to exist")
-            .current
-            .iter()
-            .any(|pulse| *pulse == High)
-    });
-
-    println!("presses of 'tx': {tx_presses}");
-
-    let result = vec![vg_presses, kp_presses, gc_presses, tx_presses]
+    rx_input_names
+        .par_iter()
+        .map(|rx_input_name| {
+            analyse_world
+                .clone()
+                .push(u64::MAX, |world| {
+                    world
+                        .machines
+                        .iter()
+                        .find(|machine| machine.name() == rx_input_name.clone())
+                        .expect("rx input to exist")
+                        .current
+                        .iter()
+                        .any(|pulse| *pulse == High)
+                })
+                .1
+        })
+        .collect::<Vec<u64>>()
         .into_iter()
         .reduce(lcm)
-        .expect("value");
-
-    result.to_string()
+        .expect("result")
+        .to_string()
 }
 
 fn lcm(first: u64, second: u64) -> u64 {
@@ -131,6 +93,7 @@ fn gcd(first: u64, second: u64) -> u64 {
     }
 }
 
+#[derive(Clone)]
 struct World {
     machines: Vec<Machine>,
 }
@@ -142,7 +105,7 @@ impl World {
         }
     }
 
-    fn push(&mut self, times: u64, or: fn(&World) -> bool) -> (u64, u64) {
+    fn push(&mut self, times: u64, or: impl Fn(&World) -> bool) -> (u64, u64) {
         let (mut total_low, mut total_high) = (0u64, 0u64);
         let mut time = 0;
 
@@ -240,6 +203,7 @@ impl Display for World {
 
 type MachineName = String;
 
+#[derive(Clone)]
 struct Machine {
     kind: Kind,
     next: Vec<Pulse>,
@@ -273,7 +237,7 @@ impl Machine {
         match self.kind.clone() {
             Broadcaster => {}
             FlipFlop(name, state) => {
-                pulses_by_machine.iter().for_each(|(machine_name, pulses)| {
+                pulses_by_machine.iter().for_each(|(_, pulses)| {
                     pulses.iter().for_each(|pulse| match pulse {
                         High => {}
                         Low => {
