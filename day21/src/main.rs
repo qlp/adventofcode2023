@@ -1,4 +1,5 @@
 use bit_set::BitSet;
+use std::collections::HashSet;
 use std::fmt::{Display, Formatter, Write};
 
 const INPUT: &str = include_str!("input.txt");
@@ -47,8 +48,8 @@ impl World {
         let start = input
             .find('S')
             .map(|start| Point {
-                x: start % (size.width + 1), // +1 to compensate for new-line chars
-                y: start / (size.width + 1),
+                x: start as i64 % (size.width as i64 + 1), // +1 to compensate for new-line chars
+                y: start as i64 / (size.width as i64 + 1),
             })
             .expect("a start point");
 
@@ -72,15 +73,15 @@ impl World {
     }
 
     fn reached(&self, number_of_steps: usize) -> usize {
-        let mut reached = BitSet::with_capacity(self.size.surface());
+        let mut reached: HashSet<Point> = HashSet::new();
 
-        reached.insert(self.index(&self.start));
+        reached.insert(self.start);
 
-        (1..=number_of_steps).for_each(|step| {
+        (1..=number_of_steps).for_each(|_| {
             reached.extend(
                 reached
                     .iter()
-                    .flat_map(|point_index| {
+                    .flat_map(|point| {
                         [
                             Direction::Left,
                             Direction::Right,
@@ -88,73 +89,101 @@ impl World {
                             Direction::Down,
                         ]
                         .into_iter()
-                        .filter_map(|direction| self.walk(&self.point(point_index), &direction))
-                        .map(|point| self.index(&point))
-                        .collect::<Vec<usize>>()
+                        .filter_map(|direction| self.walk(&point, &direction))
+                        .collect::<Vec<Point>>()
                     })
-                    .collect::<Vec<usize>>(),
+                    .collect::<Vec<Point>>(),
             );
         });
 
-        reached
+        let min_x = reached
             .iter()
-            .filter(|reached_index| {
-                let reached_point = self.point(*reached_index);
+            .min_by_key(|point| point.x)
+            .expect("points")
+            .x;
+        let max_x = reached
+            .iter()
+            .max_by_key(|point| point.x)
+            .expect("points")
+            .x;
+        let min_y = reached
+            .iter()
+            .min_by_key(|point| point.y)
+            .expect("points")
+            .y;
+        let max_y = reached
+            .iter()
+            .max_by_key(|point| point.y)
+            .expect("points")
+            .y;
 
-                match reached_point.y % 2 == self.start.y % 2 {
-                    true => reached_point.x % 2 == self.start.x % 2,
-                    false => reached_point.x % 2 != self.start.x % 2,
-                }
-            })
+        (min_y..=max_y).for_each(|y| {
+            (min_x..=max_x).for_each(|x| {
+                let point = Point { x, y };
+                let did_reach = reached.contains(&point);
+                let is_blocked = self.blocked(&point);
+                let is_start = point == self.start;
+
+                print!(
+                    "{}",
+                    match (did_reach, is_blocked, is_start) {
+                        (true, false, true) => 'S',
+                        (true, false, false) => 'O',
+                        (false, true, false) => '#',
+                        (false, false, false) => '.',
+                        _ => panic!("unexpected"),
+                    }
+                );
+            });
+            println!();
+        });
+
+        reached
+            .into_iter()
+            .filter(
+                |reached_point| match mod_pos(reached_point.y, 2) == mod_pos(self.start.y, 2) {
+                    true => mod_pos(reached_point.x, 2) == mod_pos(self.start.x, 2),
+                    false => mod_pos(reached_point.x, 2) != mod_pos(self.start.x, 2),
+                },
+            )
             .count()
     }
 
-    fn index(&self, point: &Point) -> usize {
-        point.y * self.size.width + point.x
+    fn blocked(&self, point: &Point) -> bool {
+        self.map.contains(self.index_on_map(point))
     }
 
-    fn point(&self, index: usize) -> Point {
-        Point {
-            x: index % self.size.width,
-            y: index / self.size.width,
-        }
+    fn index_on_map(&self, point: &Point) -> usize {
+        let x = mod_pos(point.x, self.size.width as i64) as usize;
+        let y = mod_pos(point.y, self.size.width as i64) as usize;
+
+        y * self.size.width + x
     }
 
     fn walk(&self, point: &Point, direction: &Direction) -> Option<Point> {
-        match direction {
-            Direction::Up => match point.y == 0 {
-                true => None,
-                false => Some(Point {
-                    x: point.x,
-                    y: point.y - 1,
-                }),
+        let candidate = match direction {
+            Direction::Up => Point {
+                x: point.x,
+                y: point.y + 1,
             },
-            Direction::Down => match point.y == self.size.height - 1 {
-                true => None,
-                false => Some(Point {
-                    x: point.x,
-                    y: point.y + 1,
-                }),
+            Direction::Down => Point {
+                x: point.x,
+                y: point.y - 1,
             },
-            Direction::Left => match point.x == 0 {
-                true => None,
-                false => Some(Point {
-                    x: point.x - 1,
-                    y: point.y,
-                }),
+            Direction::Left => Point {
+                x: point.x - 1,
+                y: point.y,
             },
-            Direction::Right => match point.x == self.size.width - 1 {
-                true => None,
-                false => Some(Point {
-                    x: point.x + 1,
-                    y: point.y,
-                }),
+            Direction::Right => Point {
+                x: point.x + 1,
+                y: point.y,
             },
-        }
-        .and_then(|point| match self.map.contains(self.index(&point)) {
+        };
+
+        match self.blocked(&candidate) {
             true => None,
-            false => Some(point),
-        })
+            false => Some(candidate),
+        }
     }
 }
 
@@ -165,10 +194,12 @@ impl Display for World {
                 f.write_char(
                     match self
                         .map
-                        .contains(line_index * self.size.width + column_index)
+                        .contains((line_index * self.size.width + column_index) as usize)
                     {
                         true => '#',
-                        false => match line_index == self.start.y && column_index == self.start.x {
+                        false => match line_index == self.start.y as usize
+                            && column_index == self.start.x as usize
+                        {
                             true => 'S',
                             false => '.',
                         },
@@ -183,9 +214,10 @@ impl Display for World {
     }
 }
 
+#[derive(Hash, Eq, PartialEq, Clone, Copy)]
 struct Point {
-    x: usize,
-    y: usize,
+    x: i64,
+    y: i64,
 }
 
 impl Display for Point {
@@ -197,12 +229,6 @@ impl Display for Point {
 struct Size {
     width: usize,
     height: usize,
-}
-
-impl Size {
-    fn surface(&self) -> usize {
-        self.width * self.height
-    }
 }
 
 impl Display for Size {
@@ -217,4 +243,8 @@ enum Direction {
     Down,
     Left,
     Right,
+}
+
+fn mod_pos(value: i64, division: i64) -> i64 {
+    ((value % division) + division) % division
 }
