@@ -52,7 +52,6 @@ fn two(input: &str, number_of_steps: usize) -> String {
 
     let point_up_left = Point { x: 0, y: 0 };
     let point_up_right = Point { x: size - 1, y: 0 };
-
     let point_down_left = Point { x: 0, y: size - 1 };
     let point_down_right = Point {
         x: size - 1,
@@ -147,10 +146,10 @@ impl World {
     }
 
     fn reached(&self, number_of_steps: usize) -> usize {
-        self.reached_from_point(self.start, number_of_steps, number_of_steps % 2 == 0)
+        self.reached_from_point(self.start, number_of_steps, true)
     }
 
-    fn reached_from_point(&self, from: Point, number_of_steps: usize, only_odd: bool) -> usize {
+    fn reached_from_point(&self, from: Point, number_of_steps: usize, odd: bool) -> usize {
         let mut reached: BitSet<usize> = BitSet::from_iter(vec![self.index_on_map(&from)]);
         let mut active: HashSet<usize> = HashSet::from_iter(vec![self.index_on_map(&from)]);
 
@@ -177,7 +176,7 @@ impl World {
 
         reached
             .into_iter()
-            .filter(|reached_point| match only_odd {
+            .filter(|reached_point| match odd {
                 true => {
                     (reached_point / self.size.width) % 2 == (reached_point % self.size.width) % 2
                 }
