@@ -1,6 +1,5 @@
 use rayon::prelude::*;
 use std::collections::HashMap;
-use std::fmt::{Display, Formatter};
 
 use State::On;
 
@@ -191,16 +190,6 @@ impl World {
     }
 }
 
-impl Display for World {
-    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
-        self.machines
-            .iter()
-            .for_each(|machine| f.write_fmt(format_args!("{}\n", machine)).unwrap());
-
-        Ok(())
-    }
-}
-
 type MachineName = String;
 
 #[derive(Clone)]
@@ -283,16 +272,6 @@ impl Machine {
     }
 }
 
-impl Display for Machine {
-    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
-        f.write_fmt(format_args!(
-            "{} -> {}",
-            self.kind,
-            self.outgoing.join(", ")
-        ))
-    }
-}
-
 #[derive(Clone, Eq, PartialEq)]
 enum Kind {
     Broadcaster,
@@ -307,16 +286,6 @@ impl Kind {
             Some('&') => Conjunction(input[1..input.len()].to_string(), HashMap::new()),
             Some('b') => Broadcaster,
             _ => panic!("unexpected kind"),
-        }
-    }
-}
-
-impl Display for Kind {
-    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
-        match self {
-            Broadcaster => f.write_str("broadcaster"),
-            FlipFlop(name, _) => f.write_fmt(format_args!("%{}", name)),
-            Conjunction(name, _) => f.write_fmt(format_args!("&{}", name)),
         }
     }
 }
@@ -340,13 +309,4 @@ impl State {
 enum Pulse {
     High,
     Low,
-}
-
-impl Display for Pulse {
-    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
-        f.write_str(match self {
-            High => "high",
-            Low => "low",
-        })
-    }
 }
