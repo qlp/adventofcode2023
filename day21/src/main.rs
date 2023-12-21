@@ -47,7 +47,7 @@ fn two(input: &str, number_of_steps: usize) -> String {
             y: (size as usize - 1) / 2,
         }, // right
     ]
-    .map(|point| world.reached_from_point(vec![point], size - 1, false) as u64)
+    .map(|point| world.reached_from_point(point, size - 1, false) as u64)
     .iter()
     .sum();
 
@@ -72,7 +72,7 @@ fn two(input: &str, number_of_steps: usize) -> String {
         point_down_left,
         point_down_right,
     ]
-    .map(|point| world.reached_from_point(vec![point], ((size - 1) / 2) - 1, true) as u64)
+    .map(|point| world.reached_from_point(point, ((size - 1) / 2) - 1, true) as u64)
     .iter()
     .sum();
 
@@ -82,14 +82,14 @@ fn two(input: &str, number_of_steps: usize) -> String {
         point_down_left,
         point_down_right,
     ]
-    .map(|point| world.reached_from_point(vec![point], (size - 1) / 2 + size - 1, false) as u64)
+    .map(|point| world.reached_from_point(point, (size - 1) / 2 + size - 1, false) as u64)
     .iter()
     .sum();
 
     let completely_filled_even =
-        world.reached_from_point(vec![world.start], world.size.width, false) as u64;
+        world.reached_from_point(world.start, world.size.width, false) as u64;
     let completely_filled_odd =
-        world.reached_from_point(vec![world.start], world.size.width, true) as u64;
+        world.reached_from_point(world.start, world.size.width, true) as u64;
 
     let max_number_of_completed_blocks_on_row = (blocks_in_between - 1) * 2 + 1;
 
@@ -154,19 +154,13 @@ impl World {
     }
 
     fn reached(&self, number_of_steps: usize) -> usize {
-        self.reached_from_point(vec![self.start], number_of_steps, number_of_steps % 2 == 0)
+        self.reached_from_point(self.start, number_of_steps, number_of_steps % 2 == 0)
     }
 
-    fn reached_from_point(
-        &self,
-        from: Vec<Point>,
-        number_of_steps: usize,
-        only_odd: bool,
-    ) -> usize {
-        let mut reached: BitSet<usize> =
-            BitSet::from_iter(from.iter().map(|point| self.index_on_map(point)));
+    fn reached_from_point(&self, from: Point, number_of_steps: usize, only_odd: bool) -> usize {
+        let mut reached: BitSet<usize> = BitSet::from_iter(vec![self.index_on_map(&from)]);
 
-        (reached.len()..=number_of_steps).for_each(|_| {
+        (1..=number_of_steps).for_each(|_| {
             reached.extend(
                 reached
                     .iter()
@@ -262,8 +256,4 @@ enum Direction {
     Down,
     Left,
     Right,
-}
-
-fn mod_pos(value: usize, division: usize) -> usize {
-    ((value % division) + division) % division
 }
