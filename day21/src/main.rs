@@ -163,13 +163,14 @@ impl World {
         number_of_steps: usize,
         only_odd: bool,
     ) -> usize {
-        let mut reached: HashSet<Point> = HashSet::from_iter(from);
+        let mut reached: BitSet<usize> =
+            BitSet::from_iter(from.iter().map(|point| self.index_on_map(point)));
 
         (reached.len()..=number_of_steps).for_each(|_| {
             reached.extend(
                 reached
                     .iter()
-                    .flat_map(|point| {
+                    .flat_map(|index| {
                         [
                             Direction::Left,
                             Direction::Right,
@@ -177,84 +178,70 @@ impl World {
                             Direction::Down,
                         ]
                         .into_iter()
-                        .filter_map(|direction| self.walk(point, &direction))
-                        .collect::<Vec<Point>>()
+                        .filter_map(|direction| self.walk(index, &direction))
+                        .collect::<Vec<usize>>()
                     })
-                    .collect::<Vec<Point>>(),
+                    .collect::<Vec<usize>>(),
             );
         });
 
-        let filtered: HashSet<Point> = match only_odd {
+        let filtered: HashSet<usize> = match only_odd {
             true => reached
                 .into_iter()
                 .filter(|reached_point| {
-                    match mod_pos(reached_point.y, 2) == mod_pos(self.start.y, 2) {
-                        true => mod_pos(reached_point.x, 2) == mod_pos(self.start.x, 2),
-                        false => mod_pos(reached_point.x, 2) != mod_pos(self.start.x, 2),
-                    }
+                    (reached_point / self.size.width) % 2 == (reached_point % self.size.width) % 2
                 })
                 .collect(),
             false => reached
                 .into_iter()
-                .filter(|reached_point| mod_pos(reached_point.y, 2) != mod_pos(reached_point.x, 2))
+                .filter(|reached_point| {
+                    (reached_point / self.size.width) % 2 != (reached_point % self.size.width) % 2
+                })
                 .collect(),
         };
 
         filtered.len()
     }
 
-    fn blocked(&self, point: &Point) -> bool {
-        self.map.contains(self.index_on_map(point))
+    fn blocked(&self, index: usize) -> bool {
+        self.map.contains(index)
     }
 
     fn index_on_map(&self, point: &Point) -> usize {
-        let on_map = self.point_on_map(point);
-
-        on_map.y * self.size.width + on_map.x
+        point.y * self.size.width + point.x
     }
 
-    fn point_on_map(&self, point: &Point) -> Point {
-        Point {
-            x: mod_pos(point.x, self.size.width),
-            y: mod_pos(point.y, self.size.width),
-        }
-    }
+    fn walk(&self, index: usize, direction: &Direction) -> Option<usize> {
+        let size = self.size.width;
+        let x = index % size;
+        let y = index / size;
 
-    fn walk(&self, point: &Point, direction: &Direction) -> Option<Point> {
         match direction {
-            Direction::Up => match point.y == 0 {
+            Direction::Up => match y == 0 {
                 true => None,
-                false => Some(Point {
-                    x: point.x,
-                    y: point.y - 1,
-                }),
+                false => Some(self.to_index(x, y - 1)),
             },
-            Direction::Down => match point.y == self.size.height - 1 {
+            Direction::Down => match y == self.size.height - 1 {
                 true => None,
-                false => Some(Point {
-                    x: point.x,
-                    y: point.y + 1,
-                }),
+                false => Some(self.to_index(x, y + 1)),
             },
-            Direction::Left => match point.x == 0 {
+            Direction::Left => match x == 0 {
                 true => None,
-                false => Some(Point {
-                    x: point.x - 1,
-                    y: point.y,
-                }),
+                false => Some(self.to_index(x - 1, y)),
             },
-            Direction::Right => match point.x == self.size.width - 1 {
+            Direction::Right => match x == size - 1 {
                 true => None,
-                false => Some(Point {
-                    x: point.x + 1,
-                    y: point.y,
-                }),
+                false => Some(self.to_index(x + 1, y)),
             },
         }
-        .and_then(|point| match self.blocked(&point) {
+        .and_then(|index| match self.blocked(index) {
             true => None,
-            false => Some(point),
+            false => Some(index),
         })
+    }
+
+    fn to_index(&self, x: usize, y: usize) -> usize {
+        y * self.size.width + x
     }
 }
 
