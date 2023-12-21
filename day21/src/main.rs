@@ -6,9 +6,15 @@ const EXAMPLE: &str = include_str!("example.txt");
 
 fn main() {
     print_answer("one (example)", &one(EXAMPLE, 6), "16");
-    print_answer("one", &one(INPUT, 64), "");
-    // print_answer("two (example)", &two(EXAMPLE), "");
-    // print_answer("two", &two(INPUT), "");
+    print_answer("one", &one(INPUT, 64), "3751");
+    print_answer("two (example) - 6", &two(EXAMPLE, 6), "16");
+    print_answer("two (example) - 10", &two(EXAMPLE, 10), "50");
+    print_answer("two (example) - 50", &two(EXAMPLE, 50), "1594");
+    print_answer("two (example) - 100", &two(EXAMPLE, 100), "6536");
+    print_answer("two (example) - 500", &two(EXAMPLE, 500), "167004");
+    print_answer("two (example) - 1000", &two(EXAMPLE, 1000), "668697");
+    print_answer("two (example) - 5000", &two(EXAMPLE, 5000), "16733044");
+    print_answer("two", &two(INPUT, 26501365), "");
 }
 
 fn print_answer(name: &str, actual: &str, expected: &str) {
@@ -19,15 +25,11 @@ fn print_answer(name: &str, actual: &str, expected: &str) {
 }
 
 fn one(input: &str, number_of_steps: usize) -> String {
-    let world = World::parse(input);
-
-    println!("{world}");
-
-    world.reached(number_of_steps).to_string()
+    World::parse(input).reached(number_of_steps).to_string()
 }
 
-fn two(input: &str) -> String {
-    String::new()
+fn two(input: &str, number_of_steps: usize) -> String {
+    World::parse(input).reached(number_of_steps).to_string()
 }
 
 struct World {
