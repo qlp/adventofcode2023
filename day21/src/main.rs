@@ -29,41 +29,34 @@ fn two(input: &str, number_of_steps: usize) -> String {
     let steps_to_leave_center = ((size - 1) / 2) as u64;
     let blocks_in_between = (number_of_steps as u64 - steps_to_leave_center) / size as u64;
 
-    let points_on_axis: u64 = [
-        Point {
-            x: (size as usize - 1) / 2,
-            y: size as usize - 1,
-        }, // up
-        Point {
-            x: (size as usize - 1) / 2,
-            y: 0,
-        }, // down
-        Point {
-            x: size as usize - 1,
-            y: (size as usize - 1) / 2,
-        }, // left
-        Point {
-            x: 0,
-            y: (size as usize - 1) / 2,
-        }, // right
-    ]
-    .map(|point| world.reached_from_point(point, size - 1, false) as u64)
-    .iter()
-    .sum();
-
-    let point_up_left = Point { x: 0, y: 0 };
-    let point_up_right = Point {
-        x: size as usize - 1,
+    let center_bottom = Point {
+        x: (size - 1) / 2,
+        y: size - 1,
+    };
+    let center_top = Point {
+        x: (size - 1) / 2,
         y: 0,
     };
-
-    let point_down_left = Point {
-        x: 0,
-        y: size as usize - 1,
+    let center_right = Point {
+        x: size - 1,
+        y: (size - 1) / 2,
     };
+    let center_left = Point {
+        x: 0,
+        y: (size - 1) / 2,
+    };
+    let points_on_axis: u64 = [center_bottom, center_top, center_right, center_left]
+        .map(|point| world.reached_from_point(point, size - 1, false) as u64)
+        .iter()
+        .sum();
+
+    let point_up_left = Point { x: 0, y: 0 };
+    let point_up_right = Point { x: size - 1, y: 0 };
+
+    let point_down_left = Point { x: 0, y: size - 1 };
     let point_down_right = Point {
-        x: size as usize - 1,
-        y: size as usize - 1,
+        x: size - 1,
+        y: size - 1,
     };
 
     let one_quarter_filled_points: u64 = [
@@ -159,42 +152,40 @@ impl World {
 
     fn reached_from_point(&self, from: Point, number_of_steps: usize, only_odd: bool) -> usize {
         let mut reached: BitSet<usize> = BitSet::from_iter(vec![self.index_on_map(&from)]);
+        let mut active: HashSet<usize> = HashSet::from_iter(vec![self.index_on_map(&from)]);
 
         (1..=number_of_steps).for_each(|_| {
-            reached.extend(
-                reached
-                    .iter()
-                    .flat_map(|index| {
-                        [
-                            Direction::Left,
-                            Direction::Right,
-                            Direction::Up,
-                            Direction::Down,
-                        ]
-                        .into_iter()
-                        .filter_map(|direction| self.walk(index, &direction))
-                        .collect::<Vec<usize>>()
-                    })
-                    .collect::<Vec<usize>>(),
-            );
+            let new_active: HashSet<usize> = active
+                .iter()
+                .flat_map(|index| {
+                    [
+                        Direction::Left,
+                        Direction::Right,
+                        Direction::Up,
+                        Direction::Down,
+                    ]
+                    .into_iter()
+                    .filter_map(|direction| self.walk(*index, &direction))
+                    .filter(|index| !reached.contains(*index))
+                    .collect::<Vec<usize>>()
+                })
+                .collect();
+
+            reached.extend(new_active.clone());
+            active = new_active;
         });
 
-        let filtered: HashSet<usize> = match only_odd {
-            true => reached
-                .into_iter()
-                .filter(|reached_point| {
+        reached
+            .into_iter()
+            .filter(|reached_point| match only_odd {
+                true => {
                     (reached_point / self.size.width) % 2 == (reached_point % self.size.width) % 2
-                })
-                .collect(),
-            false => reached
-                .into_iter()
-                .filter(|reached_point| {
+                }
+                false => {
                     (reached_point / self.size.width) % 2 != (reached_point % self.size.width) % 2
-                })
-                .collect(),
-        };
-
-        filtered.len()
+                }
+            })
+            .count()
     }
 
     fn blocked(&self, index: usize) -> bool {
