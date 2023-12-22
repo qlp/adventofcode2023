@@ -6,8 +6,8 @@ const EXAMPLE: &str = include_str!("example.txt");
 fn main() {
     print_answer("one (example)", &one(EXAMPLE), "5");
     print_answer("one", &one(INPUT), "517");
-    // print_answer("two (example)", &two(EXAMPLE), "");
-    // print_answer("two", &two(INPUT), "");
+    print_answer("two (example)", &two(EXAMPLE), "7");
+    print_answer("two", &two(INPUT), "61276");
 }
 
 fn print_answer(name: &str, actual: &str, expected: &str) {
@@ -20,12 +20,20 @@ fn print_answer(name: &str, actual: &str, expected: &str) {
 fn one(input: &str) -> String {
     World::parse(input)
         .apply_gravity()
+        .0
         .removeable_count()
         .to_string()
 }
 
 fn two(input: &str) -> String {
-    String::new()
+    let world = World::parse(input).apply_gravity().0;
+
+    world
+        .blocks
+        .iter()
+        .map(|block| world.blocks_fallen_removing_block(block))
+        .sum::<usize>()
+        .to_string()
 }
 
 struct World {
@@ -39,20 +47,36 @@ impl World {
         }
     }
 
-    fn apply_gravity(&self) -> Self {
+    fn apply_gravity(&self) -> (Self, usize) {
+        let mut dropped = 0usize;
         let mut height_map = HeightMap::from(self);
 
         let mut new_blocks = self.blocks.clone();
         new_blocks.sort_by_key(|block| block.from.z);
         new_blocks.iter_mut().for_each(|block| {
-            println!("{block}");
-            height_map.drop(block);
-            println!("{block}");
-            println!("{height_map}");
-            println!();
+            // println!("{block}");
+            if height_map.drop(block) {
+                dropped += 1
+            }
+            // println!("{block}");
+            // println!("{height_map}");
+            // println!();
         });
 
-        Self { blocks: new_blocks }
+        (Self { blocks: new_blocks }, dropped)
+    }
+
+    fn blocks_fallen_removing_block(&self, block_to_remove: &Block) -> usize {
+        let world = Self {
+            blocks: self
+                .blocks
+                .clone()
+                .into_iter()
+                .filter(|block| block != block_to_remove)
+                .collect(),
+        };
+
+        world.apply_gravity().1
     }
 
     fn removeable_count(&self) -> usize {
@@ -254,7 +278,7 @@ impl HeightMap {
         })
     }
 
-    fn drop(&mut self, block: &mut Block) {
+    fn drop(&mut self, block: &mut Block) -> bool {
         let current_height = self.height_at_block(block);
         let new_height = current_height + block.z_size();
         self.set_height_at_block(block, new_height);
@@ -262,6 +286,8 @@ impl HeightMap {
         let dropping = block.from.z - current_height - 1;
 
         block.drop(dropping);
+
+        dropping != 0
     }
 }
 
