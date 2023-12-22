@@ -1,5 +1,3 @@
-use std::fmt::{Display, Formatter, Write};
-
 const INPUT: &str = include_str!("input.txt");
 const EXAMPLE: &str = include_str!("example.txt");
 
@@ -54,13 +52,9 @@ impl World {
         let mut new_blocks = self.blocks.clone();
         new_blocks.sort_by_key(|block| block.from.z);
         new_blocks.iter_mut().for_each(|block| {
-            // println!("{block}");
             if height_map.drop(block) {
                 dropped += 1
             }
-            // println!("{block}");
-            // println!("{height_map}");
-            // println!();
         });
 
         (Self { blocks: new_blocks }, dropped)
@@ -87,7 +81,9 @@ impl World {
                     candidate,
                     self.blocks
                         .iter()
-                        .filter(|supported_by_candidate_candidate| candidate.is_supporting(supported_by_candidate_candidate))
+                        .filter(|supported_by_candidate_candidate| {
+                            candidate.is_supporting(supported_by_candidate_candidate)
+                        })
                         .collect::<Vec<&Block>>(),
                 )
             })
@@ -111,38 +107,14 @@ impl World {
                         .collect::<Vec<(&Block, Vec<&Block>)>>(),
                 )
             })
-            .filter(|(candidate, supported_by_candidate_vec)| {
-                let all_supported_blocks_supported_by_another_block = supported_by_candidate_vec.iter().all(|(supported, supporting_supported)|
-                    supporting_supported.len() > 1
-                );
-
-                println!(
-                    "candidate ({all_supported_blocks_supported_by_another_block}): {}{}",
-                    candidate,
-                    supported_by_candidate_vec
-                        .iter()
-                        .map(|(supported_by_candidate, supporting_supported_by_candidate_vec)| format!(
-                            "\n  supporting:\n    {}\n    supported by:{}",
-                            supported_by_candidate,
-                            supporting_supported_by_candidate_vec
-                                .iter()
-                                .fold(String::new(), |mut output, supporting_supported_by_candidate| {let _ = write!(output, "\n      {}", supporting_supported_by_candidate); output})
-                        ))
-                        .collect::<Vec<String>>()
-                        .join(", "),
-                );
-                println!();
+            .filter(|(_, supported_by_candidate_vec)| {
+                let all_supported_blocks_supported_by_another_block = supported_by_candidate_vec
+                    .iter()
+                    .all(|(_, supporting_supported)| supporting_supported.len() > 1);
 
                 all_supported_blocks_supported_by_another_block
-            }).count()
-    }
-}
-
-impl Display for World {
-    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
-        self.blocks
-            .iter()
-            .try_for_each(|block| f.write_fmt(format_args!("{}\n", block)))
+            })
+            .count()
     }
 }
 
@@ -165,12 +137,6 @@ impl Point {
             y: values[1],
             z: values[2],
         }
-    }
-}
-
-impl Display for Point {
-    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
-        f.write_fmt(format_args!("{},{},{}", self.x, self.y, self.z))
     }
 }
 
@@ -205,27 +171,6 @@ impl Block {
             && self.to.x >= supported.from.x
             && self.from.y <= supported.to.y
             && self.to.y >= supported.from.y
-    }
-}
-
-impl Display for Block {
-    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
-        f.write_fmt(format_args!("{}~{}\n", self.from, self.to))?;
-        (0..=9).try_for_each(|x| {
-            f.write_char(match self.from.x <= x && self.to.x >= x {
-                true => 'X',
-                false => '.',
-            })
-        })?;
-        f.write_char('\n')?;
-
-        (0..=9).try_for_each(|y| {
-            f.write_char(match self.from.y <= y && self.to.y >= y {
-                true => 'Y',
-                false => '.',
-            })
-        })?;
-        f.write_char('\n')
     }
 }
 
@@ -288,32 +233,5 @@ impl HeightMap {
         block.drop(dropping);
 
         dropping != 0
-    }
-}
-
-impl Display for HeightMap {
-    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
-        let max_height_len = self.map.iter().max().unwrap_or(&0usize).to_string().len();
-
-        (0..self.size.y).try_for_each(|y| {
-            if y == 0 {
-                f.write_str("  ")?;
-                (0..self.size.x).try_for_each(|x| f.write_fmt(format_args!(" {}", x)))?;
-                f.write_str("\n\n")?
-            }
-
-            (0..self.size.x).try_for_each(|x| {
-                if x == 0 {
-                    f.write_fmt(format_args!("{} ", y))?
-                }
-
-                f.write_fmt(format_args!(
-                    " {:0width$}",
-                    self.height_at_point(x, y),
-                    width = max_height_len
-                ))
-            })?;
-            f.write_char('\n')
-        })
     }
 }
