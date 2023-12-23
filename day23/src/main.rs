@@ -1,9 +1,9 @@
-use std::collections::{HashMap, HashSet};
+use std::collections::HashSet;
 use std::fmt::{Display, Formatter, Write};
 use std::str::FromStr;
 
 use crate::Direction::{Down, Left, Right, Up};
-use crate::Part::One;
+use crate::Part::{One, Two};
 use crate::Tile::{Forrest, Path, Slope};
 
 const INPUT: &str = include_str!("input.txt");
@@ -12,8 +12,8 @@ const EXAMPLE: &str = include_str!("example.txt");
 fn main() {
     print_answer("one (example)", &one(EXAMPLE), "94");
     print_answer("one", &one(INPUT), "2010");
-    // print_answer("two (example)", &two(EXAMPLE), "");
-    // print_answer("two", &two(INPUT), "");
+    print_answer("two (example)", &two(EXAMPLE), "154");
+    print_answer("two", &two(INPUT), "6318");
 }
 
 fn print_answer(name: &str, actual: &str, expected: &str) {
@@ -31,7 +31,10 @@ fn one(input: &str) -> String {
 }
 
 fn two(input: &str) -> String {
-    String::new()
+    TrailMap::from_str(input)
+        .expect("a map")
+        .longest_trail_length(Two)
+        .to_string()
 }
 
 enum Part {
@@ -162,28 +165,80 @@ impl TrailMap {
             .collect::<Vec<&Trail>>()
             .single()]];
 
-        while options
-            .iter()
-            .any(|option| option.last().expect("trails").to != self.end())
-        {
+        let mut completed_trails = vec![];
+
+        while !options.is_empty() {
+            // println!("=================================");
+            // options.iter().for_each(|option| {
+            //     println!("----------------------------------");
+            //     println!();
+            //     option.iter().for_each(|trail| {
+            //         println!("{trail}");
+            //     })
+            // });
+
             options = options
                 .iter()
-                .filter(|option| option.last().expect("trails").to != self.end())
-                .flat_map(|option| {
-                    trails
-                        .iter()
-                        .filter(|extension| extension.from == option.last().expect("trails").to)
-                        .map(|extension| {
-                            let mut new_option = option.clone();
-                            new_option.push(extension);
+                .flat_map(
+                    |option| match option.last().expect("at least one").to == self.end() {
+                        true => {
+                            completed_trails.push(option.clone());
+                            vec![]
+                        } // found and end path
+                        false => trails
+                            .iter()
+                            .filter(|extension| !option.contains(extension))
+                            .filter(|extension| {
+                                match part {
+                                    One => extension.from == option.last().expect("trails").to,
+                                    Two => {
+                                        let current_point = match option.len() == 1 {
+                                            true => option.single().to, // first track
+                                            false => {
+                                                let before = option[option.len() - 2];
+                                                let last = option.last().expect("last");
 
-                            new_option
-                        })
-                })
+                                                match before.to == last.from
+                                                    || before.from == last.from
+                                                {
+                                                    true => last.to,
+                                                    false => last.from,
+                                                }
+                                            }
+                                        };
+
+                                        let next_point = match (
+                                            current_point == extension.to,
+                                            current_point == extension.from,
+                                        ) {
+                                            (true, false) => Some(extension.from),
+                                            (false, true) => Some(extension.to),
+                                            (false, false) => None,
+                                            (true, true) => panic!("didn't expect a loop"),
+                                        };
+
+                                        match next_point {
+                                            None => false,
+                                            Some(next_point) => !option.iter().any(|track| {
+                                                track.from == next_point || track.to == next_point
+                                            }),
+                                        }
+                                    }
+                                }
+                            })
+                            .map(|extension| {
+                                let mut new_option = option.clone();
+                                new_option.push(extension);
+
+                                new_option
+                            })
+                            .collect(),
+                    },
+                )
                 .collect()
         }
 
-        options
+        completed_trails
             .iter()
             .map(|option| option.iter().fold(0, |acc, trail| acc + trail.size))
             .max()
@@ -206,15 +261,16 @@ impl TrailMap {
 
         let mut result = Vec::from_iter(trails);
         result.sort_by_key(|trail| self.point_to_index(&trail.from));
-
-        return result;
+        result
     }
+
     fn find_trails_from_point(&self, point: &Point) -> Vec<Trail> {
         self.points_from(point, None)
             .iter()
             .map(|(direction, start)| self.find_trail_in_direction(point, start, direction))
             .collect()
     }
+
     fn find_trail_in_direction(&self, origin: &Point, start: &Point, to: &Direction) -> Trail {
         let mut size = 1;
 
