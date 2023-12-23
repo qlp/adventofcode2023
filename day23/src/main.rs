@@ -3,6 +3,7 @@ use std::fmt::{Display, Formatter, Write};
 use std::str::FromStr;
 
 use crate::Direction::{Down, Left, Right, Up};
+use crate::Part::One;
 use crate::Tile::{Forrest, Path, Slope};
 
 const INPUT: &str = include_str!("input.txt");
@@ -23,19 +24,19 @@ fn print_answer(name: &str, actual: &str, expected: &str) {
 }
 
 fn one(input: &str) -> String {
-    let map = TrailMap::from_str(input).expect("a map");
-
-    println!("{map}");
-
-    let trails = map.trails_from_start();
-
-    trails.iter().for_each(|trail| println!("{trail}"));
-
-    map.longest_trail_length().to_string()
+    TrailMap::from_str(input)
+        .expect("a map")
+        .longest_trail_length(One)
+        .to_string()
 }
 
 fn two(input: &str) -> String {
     String::new()
+}
+
+enum Part {
+    One,
+    Two,
 }
 
 #[derive(Clone, Eq, PartialEq, Hash)]
@@ -152,7 +153,7 @@ impl TrailMap {
             .collect()
     }
 
-    fn longest_trail_length(&self) -> usize {
+    fn longest_trail_length(&self, part: Part) -> usize {
         let trails = self.trails_from_start();
 
         let mut options: Vec<Vec<&Trail>> = vec![vec![trails
