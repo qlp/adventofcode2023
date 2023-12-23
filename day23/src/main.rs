@@ -1,5 +1,4 @@
 use std::collections::HashSet;
-use std::fmt::{Display, Formatter, Write};
 use std::str::FromStr;
 
 use crate::Direction::{Down, Left, Right, Up};
@@ -47,12 +46,6 @@ struct Trail {
     from: Point,
     to: Point,
     size: usize,
-}
-
-impl Display for Trail {
-    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
-        f.write_fmt(format_args!("{} -> {} ({})", self.from, self.to, self.size))
-    }
 }
 
 #[derive(Clone)]
@@ -168,15 +161,6 @@ impl TrailMap {
         let mut completed_trails = vec![];
 
         while !options.is_empty() {
-            // println!("=================================");
-            // options.iter().for_each(|option| {
-            //     println!("----------------------------------");
-            //     println!();
-            //     option.iter().for_each(|trail| {
-            //         println!("{trail}");
-            //     })
-            // });
-
             options = options
                 .iter()
                 .flat_map(
@@ -331,28 +315,6 @@ impl FromStr for TrailMap {
     }
 }
 
-impl Display for TrailMap {
-    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
-        f.write_str("  ")?;
-        (0..self.size.width).try_for_each(|index| f.write_fmt(format_args!("{}", index % 10)))?;
-        f.write_char('\n')?;
-
-        self.tiles.iter().enumerate().try_for_each(|(index, tile)| {
-            if index % self.size.width == 0 {
-                f.write_fmt(format_args!("{} ", (index / self.size.width) % 10))?;
-            }
-
-            let result = tile.fmt(f);
-
-            if (index % self.size.width) + 1 == self.size.width {
-                f.write_char('\n')?;
-            }
-
-            result
-        })
-    }
-}
-
 #[derive(Copy, Clone)]
 struct Size {
     width: usize,
@@ -379,12 +341,6 @@ struct Point {
     y: usize,
 }
 
-impl Display for Point {
-    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
-        f.write_fmt(format_args!("({},{})", self.x, self.y))
-    }
-}
-
 #[derive(Copy, Clone, Eq, PartialEq)]
 enum Tile {
     Path,
@@ -400,16 +356,6 @@ impl FromStr for Tile {
             "#" => Ok(Forrest),
             "." => Ok(Path),
             _ => Ok(Slope(Direction::from_str(s)?)),
-        }
-    }
-}
-
-impl Display for Tile {
-    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
-        match self {
-            Forrest => f.write_char('#'),
-            Path => f.write_char('.'),
-            Slope(direction) => direction.fmt(f),
         }
     }
 }
@@ -448,17 +394,6 @@ impl FromStr for Direction {
             "<" => Ok(Left),
             _ => Err(format_args!("Unexpected Slope {s}").to_string()),
         }
-    }
-}
-
-impl Display for Direction {
-    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
-        f.write_char(match self {
-            Up => '^',
-            Down => 'v',
-            Left => '<',
-            Right => '>',
-        })
     }
 }
 
