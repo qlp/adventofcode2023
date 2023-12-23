@@ -1,4 +1,4 @@
-use std::collections::HashSet;
+use std::collections::{HashMap, HashSet};
 use std::str::FromStr;
 
 use crate::Direction::{Down, Left, Right, Up};
@@ -151,6 +151,23 @@ impl TrailMap {
 
     fn longest_trail_length(&self, part: Part) -> usize {
         let trails = self.trails_from_start();
+        let points: HashSet<&Point> = trails.iter().map(|trail| &trail.from).collect();
+
+        let point_to_trails: HashMap<&Point, HashSet<&Trail>> = points
+            .iter()
+            .map(|from| {
+                (
+                    *from,
+                    trails
+                        .iter()
+                        .filter(|trail| match part {
+                            One => trail.from == **from,
+                            Two => trail.from == **from || trail.to == **from,
+                        })
+                        .collect::<HashSet<&Trail>>(),
+                )
+            })
+            .collect::<HashMap<&Point, HashSet<&Trail>>>();
 
         let mut options: Vec<Vec<&Trail>> = vec![vec![trails
             .iter()
@@ -169,28 +186,28 @@ impl TrailMap {
                             completed_trails.push(option.clone());
                             vec![]
                         } // found and end path
-                        false => trails
-                            .iter()
-                            .filter(|extension| !option.contains(extension))
-                            .filter(|extension| {
-                                match part {
+                        false => {
+                            let current_point = match option.len() == 1 {
+                                true => option.single().to, // first track
+                                false => {
+                                    let before = option[option.len() - 2];
+                                    let last = option.last().expect("last");
+
+                                    match before.to == last.from || before.from == last.from {
+                                        true => last.to,
+                                        false => last.from,
+                                    }
+                                }
+                            };
+
+                            let candidate_trails = &point_to_trails[&current_point];
+
+                            candidate_trails
+                                .iter()
+                                .filter(|extension| !option.contains(extension))
+                                .filter(|extension| match part {
                                     One => extension.from == option.last().expect("trails").to,
                                     Two => {
-                                        let current_point = match option.len() == 1 {
-                                            true => option.single().to, // first track
-                                            false => {
-                                                let before = option[option.len() - 2];
-                                                let last = option.last().expect("last");
-
-                                                match before.to == last.from
-                                                    || before.from == last.from
-                                                {
-                                                    true => last.to,
-                                                    false => last.from,
-                                                }
-                                            }
-                                        };
-
                                         let next_point = match (
                                             current_point == extension.to,
                                             current_point == extension.from,
@@ -208,15 +225,15 @@ impl TrailMap {
                                             }),
                                         }
                                     }
-                                }
-                            })
-                            .map(|extension| {
-                                let mut new_option = option.clone();
-                                new_option.push(extension);
+                                })
+                                .map(|extension| {
+                                    let mut new_option = option.clone();
+                                    new_option.push(extension);
 
-                                new_option
-                            })
-                            .collect(),
+                                    new_option
+                                })
+                                .collect()
+                        }
                     },
                 )
                 .collect()
