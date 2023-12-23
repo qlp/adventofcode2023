@@ -153,7 +153,7 @@ impl TrailMap {
         let trails = self.trails_from_start();
         let points: HashSet<&Point> = trails.iter().map(|trail| &trail.from).collect();
 
-        let point_to_trails: HashMap<&Point, HashSet<&Trail>> = points
+        let point_to_destinations: HashMap<&Point, HashSet<&Trail>> = points
             .iter()
             .map(|from| {
                 (
@@ -169,79 +169,62 @@ impl TrailMap {
             })
             .collect::<HashMap<&Point, HashSet<&Trail>>>();
 
-        let mut options: Vec<Vec<&Trail>> = vec![vec![trails
+        let mut options: Vec<Route> = point_to_destinations[&self.start()]
             .iter()
-            .filter(|trail| trail.from == self.start())
-            .collect::<Vec<&Trail>>()
-            .single()]];
+            .map(|trail| Route {
+                points: HashSet::from([&trail.from, &trail.to]),
+                last: &trail.to,
+                size: trail.size,
+            })
+            .collect();
 
         let mut completed_trails = vec![];
 
         while !options.is_empty() {
             options = options
                 .iter()
-                .flat_map(
-                    |option| match option.last().expect("at least one").to == self.end() {
-                        true => {
-                            completed_trails.push(option.clone());
-                            vec![]
-                        } // found and end path
-                        false => {
-                            let current_point = match option.len() == 1 {
-                                true => option.single().to, // first track
-                                false => {
-                                    let before = option[option.len() - 2];
-                                    let last = option.last().expect("last");
+                .flat_map(|option| match *option.last == self.end() {
+                    true => {
+                        completed_trails.push(option.clone());
+                        vec![]
+                    } // found and end path
+                    false => {
+                        let candidate_extensions = &point_to_destinations[&option.last];
 
-                                    match before.to == last.from || before.from == last.from {
-                                        true => last.to,
-                                        false => last.from,
+                        candidate_extensions
+                            .iter()
+                            .filter_map(|extension| {
+                                match (
+                                    option.points.contains(&extension.to),
+                                    option.points.contains(&extension.from),
+                                ) {
+                                    (true, false) => Some((&extension.from, extension.size)),
+                                    (false, true) => Some((&extension.to, extension.size)),
+                                    (true, true) => None,
+                                    (false, false) => {
+                                        panic!("expect to have visited at least one point")
                                     }
                                 }
-                            };
+                            })
+                            .map(|(new_point, size)| {
+                                let mut new_points = option.points.clone();
+                                new_points.insert(new_point);
 
-                            let candidate_trails = &point_to_trails[&current_point];
-
-                            candidate_trails
-                                .iter()
-                                .filter(|extension| !option.contains(extension))
-                                .filter(|extension| match part {
-                                    One => extension.from == option.last().expect("trails").to,
-                                    Two => {
-                                        let next_point = match (
-                                            current_point == extension.to,
-                                            current_point == extension.from,
-                                        ) {
-                                            (true, false) => Some(extension.from),
-                                            (false, true) => Some(extension.to),
-                                            (false, false) => None,
-                                            (true, true) => panic!("didn't expect a loop"),
-                                        };
-
-                                        match next_point {
-                                            None => false,
-                                            Some(next_point) => !option.iter().any(|track| {
-                                                track.from == next_point || track.to == next_point
-                                            }),
-                                        }
-                                    }
-                                })
-                                .map(|extension| {
-                                    let mut new_option = option.clone();
-                                    new_option.push(extension);
-
-                                    new_option
-                                })
-                                .collect()
-                        }
-                    },
-                )
+                                Route {
+                                    points: new_points,
+                                    last: new_point,
+                                    size: option.size + size,
+                                }
+                            })
+                            .collect()
+                    }
+                })
                 .collect()
         }
 
         completed_trails
             .iter()
-            .map(|option| option.iter().fold(0, |acc, trail| acc + trail.size))
+            .map(|option| option.size)
             .max()
             .expect("at least one")
     }
@@ -330,6 +313,13 @@ impl FromStr for TrailMap {
 
         Ok(Self { size, tiles })
     }
+}
+
+#[derive(Clone)]
+struct Route<'a> {
+    points: HashSet<&'a Point>,
+    last: &'a Point,
+    size: usize,
 }
 
 #[derive(Copy, Clone)]
