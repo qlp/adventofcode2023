@@ -1,22 +1,28 @@
-use crate::Intersection::{Intersects, Overlaps, Parallel};
 use std::cmp::Ordering;
+use std::collections::HashSet;
 use std::fmt::{Display, Formatter, Pointer, Write};
 use std::num::ParseIntError;
-use std::ops::{Range, RangeInclusive, RangeToInclusive};
+use std::ops::RangeInclusive;
 use std::str::FromStr;
+
+use crate::Intersection::{Intersects, Overlaps, Parallel};
 
 const INPUT: &str = include_str!("input.txt");
 const EXAMPLE: &str = include_str!("example.txt");
 
 fn main() {
-    print_answer("one (example)", &one(EXAMPLE, 7..=27), "2");
+    // print_answer("one (example)", &one(EXAMPLE, 7..=27), "2");
+    // print_answer(
+    //     "one",
+    //     &one(INPUT, 200000000000000..=400000000000000),
+    //     "12015",
+    // );
+    // print_answer("two (example)", &two(EXAMPLE), "47");
     print_answer(
-        "one",
-        &one(INPUT, 200000000000000..=400000000000000),
-        "12015",
+        "two",
+        &two(INPUT),
+        "1133285852105183 too high, 1016365642179113 & 1016365642178618 too low",
     );
-    // print_answer("two (example)", &two(EXAMPLE), "");
-    // print_answer("two", &two(INPUT), "");
 }
 
 fn print_answer(name: &str, actual: &str, expected: &str) {
@@ -35,7 +41,140 @@ fn one(input: &str, range: RangeInclusive<i64>) -> String {
 }
 
 fn two(input: &str) -> String {
-    String::new()
+    let storm = Storm::from_str(input).expect("storm");
+
+    let mut potential_x_velocity_set: Option<HashSet<i64>> = None;
+    let mut potential_y_velocity_set: Option<HashSet<i64>> = None;
+    let mut potential_z_velocity_set: Option<HashSet<i64>> = None;
+
+    let range = -1000..=1000;
+    let min_velocity = 50;
+
+    (0..storm.stones.len() - 1).for_each(|left_index| {
+        (left_index + 1..storm.stones.len()).for_each(|right_index| {
+            let left = &storm.stones[left_index];
+            let right = &storm.stones[right_index];
+
+            if left.velocity.x == right.velocity.x && left.velocity.x.abs() > min_velocity {
+                let mut options: HashSet<i64> = HashSet::new();
+                let difference = right.position.x - left.position.x;
+                range.clone().for_each(|v| {
+                    if v != left.velocity.x && difference % (v - left.velocity.x) == 0 {
+                        options.insert(v);
+                    };
+                });
+                match &potential_x_velocity_set {
+                    None => potential_x_velocity_set = Some(options.clone()),
+                    Some(set) => {
+                        potential_x_velocity_set = Some(
+                            set.intersection(&options)
+                                .copied()
+                                .collect::<HashSet<i64>>(),
+                        )
+                    }
+                }
+            }
+
+            if left.velocity.y == right.velocity.y && left.velocity.y.abs() > min_velocity {
+                let mut options: HashSet<i64> = HashSet::new();
+                let difference = right.position.y - left.position.y;
+                range.clone().for_each(|v| {
+                    if v != left.velocity.y && difference % (v - left.velocity.y) == 0 {
+                        options.insert(v);
+                    };
+                });
+                match &potential_y_velocity_set {
+                    None => potential_y_velocity_set = Some(options.clone()),
+                    Some(set) => {
+                        potential_y_velocity_set = Some(
+                            set.intersection(&options)
+                                .copied()
+                                .collect::<HashSet<i64>>(),
+                        )
+                    }
+                }
+            }
+
+            if left.velocity.z == right.velocity.z && left.velocity.z.abs() > min_velocity {
+                let mut options: HashSet<i64> = HashSet::new();
+                let difference = right.position.z - left.position.z;
+                range.clone().for_each(|v| {
+                    if v != left.velocity.z && difference % (v - left.velocity.z) == 0 {
+                        options.insert(v);
+                    };
+                });
+                match &potential_z_velocity_set {
+                    None => potential_z_velocity_set = Some(options.clone()),
+                    Some(set) => {
+                        potential_z_velocity_set = Some(
+                            set.intersection(&options)
+                                .copied()
+                                .collect::<HashSet<i64>>(),
+                        )
+                    }
+                }
+            }
+        })
+    });
+
+    // &potential_x_velocity_set
+    //     .unwrap()
+    //     .iter()
+    //     .for_each(|potential_x| println!("potential x velocity: {potential_x}"));
+    //
+    // &potential_y_velocity_set
+    //     .unwrap()
+    //     .iter()
+    //     .for_each(|potential_y| println!("potential y velocity: {potential_y}"));
+    //
+    // &potential_z_velocity_set
+    //     .unwrap()
+    //     .iter()
+    //     .for_each(|potential_z| println!("potential z velocity: {potential_z}"));
+
+    let rvx = *potential_x_velocity_set
+        .unwrap()
+        .iter()
+        .next()
+        .expect("a value");
+    let rvy = *potential_y_velocity_set
+        .unwrap()
+        .iter()
+        .next()
+        .expect("a value");
+    let rvz = *potential_z_velocity_set
+        .unwrap()
+        .iter()
+        .next()
+        .expect("a value");
+
+    let first = &storm.stones[2];
+    let second = &storm.stones[5];
+
+    let apx = first.position.x;
+    let apy = first.position.y;
+    let apz = first.position.z;
+    let avy = first.velocity.y;
+    let avx = first.velocity.x;
+    let avz = first.velocity.z;
+
+    let bpx = second.position.x;
+    let bpy = second.position.y;
+    let bvx = second.velocity.x;
+    let bvy = second.velocity.y;
+
+    let ma = (avy - rvy) as f64 / (avx - rvx) as f64;
+    let mb = (bvy - rvy) as f64 / (bvx - rvx) as f64;
+    let ca = apy as f64 - (ma * apx as f64);
+    let cb = bpy as f64 - (mb * bpx as f64);
+
+    let x = ((cb - ca) / (ma - mb)) as i64;
+    let y = (ma * x as f64 + ca) as i64;
+    let t = ((x as f64 - apx as f64) / (avx as f64 - rvx as f64)) as i64;
+    let z = apz + (avz - rvz) * t;
+
+    println!("{x}, {y}, {z}");
+    (x + y + z).to_string()
 }
 
 struct Storm {
@@ -43,6 +182,13 @@ struct Storm {
 }
 
 impl Storm {
+    fn points_at_t(&self, t: i64) -> Vec<Point> {
+        self.stones
+            .iter()
+            .map(|stone| stone.point_at_t(t))
+            .collect()
+    }
+
     fn collisions_in_x_y(&self, range: RangeInclusive<i64>) -> Vec<XyIntersection> {
         let result = (0..self.stones.len() - 1)
             .flat_map(|left_index| {
@@ -51,7 +197,7 @@ impl Storm {
                         let left = &self.stones[left_index];
                         let right = &self.stones[right_index];
 
-                        match left.collides_x_y(&right) {
+                        match left.collides_x_y(right) {
                             Overlaps => Some(XyIntersection {
                                 points: [left, right],
                             }), // TODO: check for lines outside the boix
@@ -73,11 +219,17 @@ impl Storm {
             })
             .collect::<Vec<XyIntersection>>();
 
-        // result.iter().for_each(|collision| {
-        //     println!("{collision}");
-        // });
-
         result
+    }
+
+    fn without_rock_velocity(&self, velocity: &Velocity) -> Self {
+        Self {
+            stones: self
+                .stones
+                .iter()
+                .map(|stone| stone.with_subtracted_velocity(velocity))
+                .collect(),
+        }
     }
 }
 
@@ -132,6 +284,25 @@ impl Stone {
             Ordering::Greater => x > self.position.x,
         }
     }
+
+    fn point_at_t(&self, t: i64) -> Point {
+        Point {
+            x: self.position.x + self.velocity.x * t,
+            y: self.position.y + self.velocity.y * t,
+            z: self.position.z + self.velocity.z * t,
+        }
+    }
+
+    fn with_subtracted_velocity(&self, velocity: &Velocity) -> Stone {
+        Self {
+            position: self.position.clone(),
+            velocity: Velocity {
+                x: self.velocity.x - velocity.x,
+                y: self.velocity.y - velocity.y,
+                z: self.velocity.z - velocity.z,
+            },
+        }
+    }
 }
 
 #[derive(Debug)]
@@ -164,7 +335,7 @@ impl Display for Stone {
     }
 }
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 struct Point {
     x: i64,
     y: i64,
@@ -193,7 +364,7 @@ impl Display for Point {
     }
 }
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 struct Velocity {
     x: i64,
     y: i64,
